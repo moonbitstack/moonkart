@@ -94,6 +94,29 @@ lets the loader return `None` for "no value", which is not cached.
 let user = cache.get_with(user_id, fn(id) { fetch_user(id) })
 ```
 
+## The asynchronous cache
+
+`@moonkart.concurrent.AsyncCache` wraps any cache so that loads can be awaited.
+Concurrent readers of one key share a single loader instead of each computing
+the value.
+
+```moonbit
+import {
+  "moonbitstack/moonkart",
+  "moonbitstack/moonkart/concurrent",
+}
+```
+
+```moonbit
+let cache = @concurrent.AsyncCache::new(@moonkart.lru_cache(cap=1000))
+let user = cache.get_with(id, async fn(id) { fetch_user(id) })
+```
+
+The first task holds a mutex while its loader runs; later tasks wait, re-check
+the cache under the lock, and return the stored value. Three concurrent readers
+of one key call the loader exactly once. `concurrent` builds on the synchronous
+core unchanged, so every policy, expiry rule and counter carries over.
+
 ## Invalidation
 
 ```moonbit

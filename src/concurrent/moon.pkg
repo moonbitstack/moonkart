@@ -1,0 +1,6 @@
+// The asynchronous cache: the same cache, with awaits and coalesced loads.
+import {
+  "moonbitstack/moonkart",
+  "moonbitstack/moonkart/policy",
+  "moonbitlang/core/async",
+}
