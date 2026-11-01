@@ -511,6 +511,13 @@ pub fn[K, V, P : @policy.Policy] Cache::policy_size(
 }
 
 ///|
+/// A snapshot of every live entry as `(key, value)` pairs, in no particular
+/// order. Useful for persistence and for tests.
+pub fn[K, V, P] Cache::to_array(self : Cache[K, V, P]) -> Array[(K, V)] {
+  self.state.val.entries.to_array().map(fn(p) { (p.0, p.1.value) })
+}
+
+///|
 fn[K : Eq + Hash, V, P : @policy.Policy] load_value(
   cache : Cache[K, V, P],
   key : K,

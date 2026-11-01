@@ -117,6 +117,37 @@ the cache under the lock, and return the stored value. Three concurrent readers
 of one key call the loader exactly once. `concurrent` builds on the synchronous
 core unchanged, so every policy, expiry rule and counter carries over.
 
+## Hybrid memory and disk (native)
+
+`@moonkart.disk.DiskCache` keeps entries in memory and appends every write or
+delete to a file, so a restart can rebuild the cache from the log. Keys and
+values are turned into bytes by codecs you supply, so the layer imposes no
+format of its own.
+
+```moonbit
+import {
+  "moonbitstack/moonkart",
+  "moonbitstack/moonkart/disk",
+}
+```
+
+```moonbit
+let cache = @moonkart.lru_cache(cap=10_000)
+let disk = @disk.DiskCache::open(
+  cache, "/var/cache/app.bin",
+  encode_key, decode_key, encode_value, decode_value,
+)
+disk.set(key, value)   // memory, then an appended record
+disk.get(key)          // memory only
+disk.compact()         // rewrite the log from the live entries
+```
+
+The filesystem in the standard library is asynchronous and native-only, so this
+package is too. It is target-gated: the other backends compile unaffected, and
+`moon check --target all` stays green. Restored entries are replayed through
+`set`, so the cache's current capacity and expiry policy apply to them; call
+`compact` periodically so the append log does not grow without bound.
+
 ## Invalidation
 
 ```moonbit

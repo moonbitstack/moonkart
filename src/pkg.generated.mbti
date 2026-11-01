@@ -47,6 +47,7 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::remove(Self[K, V, P], K) -> 
 pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::set(Self[K, V, P], K, V) -> Unit
 pub fn[K, V, P] Cache::size(Self[K, V, P]) -> Int64
 pub fn[K, V, P] Cache::stats(Self[K, V, P]) -> CacheStats
+pub fn[K, V, P] Cache::to_array(Self[K, V, P]) -> Array[(K, V)]
 pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::try_get_with(Self[K, V, P], K, (K) -> V?) -> V?
 
 pub struct CacheStats {
