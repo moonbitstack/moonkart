@@ -1,2 +1,7 @@
-// What this package implements, and a first-hand link to the specification it
-// implements. A package without that link is not finished.
+// The cache: capacity, expiry, loading, invalidation, events and statistics.
+import {
+  "moonbitstack/moonkart/policy",
+  "moonbitlang/core/hashmap",
+  "moonbitlang/core/env",
+  "moonbitlang/core/ref",
+}

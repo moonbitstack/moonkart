@@ -1,0 +1,7 @@
+// Loading: compute on a miss, reuse on a hit.
+pkgtype(kind: "executable")
+
+import {
+  "moonbitstack/moonkart",
+  "moonbitlang/core/ref",
+}

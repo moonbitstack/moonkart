@@ -1,0 +1,7 @@
+// Expiry: deterministic time-to-live using a caller-supplied clock.
+pkgtype(kind: "executable")
+
+import {
+  "moonbitstack/moonkart",
+  "moonbitlang/core/ref",
+}

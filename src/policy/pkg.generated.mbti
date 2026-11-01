@@ -1,0 +1,89 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitstack/moonkart/policy"
+
+import {
+  "moonbitlang/core/hashmap",
+  "moonbitlang/core/ref",
+}
+
+// Values
+pub fn new_lru(cap? : Int64, max_weight? : Int64) -> Lru
+
+pub fn new_s3fifo(cap? : Int64, max_weight? : Int64) -> S3Fifo
+
+pub fn new_tinylfu(cap? : Int64, max_weight? : Int64, window_ratio? : Double, protected_ratio? : Double) -> Tinylfu
+
+// Errors
+
+// Types and methods
+pub struct IntrusiveList {
+  head : @ref.Ref[Int64]
+  tail : @ref.Ref[Int64]
+  links : @hashmap.HashMap[Int64, Link]
+  weight_sum : @ref.Ref[Int64]
+}
+
+pub struct Link {
+  prev : Int64
+  next : Int64
+  weight : Int64
+}
+
+pub struct Lru {
+  max_weight : Int64
+  weight : @ref.Ref[Int64]
+  order : IntrusiveList
+}
+pub fn Lru::admit(Self, Int64, Int64) -> Array[Int64]
+pub fn Lru::forget(Self, Int64) -> Unit
+pub fn Lru::hit(Self, Int64) -> Unit
+pub fn Lru::size(Self) -> Int32
+pub impl Policy for Lru
+
+pub struct S3Fifo {
+  max_weight : Int64
+  weight : @ref.Ref[Int64]
+  q_order : IntrusiveList
+  q_weight : @hashmap.HashMap[Int64, Int64]
+  q_visited : @hashmap.HashMap[Int64, Bool]
+}
+pub fn S3Fifo::admit(Self, Int64, Int64) -> Array[Int64]
+pub fn S3Fifo::forget(Self, Int64) -> Unit
+pub fn S3Fifo::hit(Self, Int64) -> Unit
+pub fn S3Fifo::size(Self) -> Int32
+pub impl Policy for S3Fifo
+
+pub struct Sketch {
+  rows : Array[Array[Int32]]
+  mask : Int32
+  count : @ref.Ref[Int32]
+  sample_size : Int32
+}
+
+pub struct Tinylfu {
+  max_weight : Int64
+  window_max : Int64
+  probation_max : Int64
+  protected_max : Int64
+  weight : @ref.Ref[Int64]
+  window : IntrusiveList
+  probation : IntrusiveList
+  protected_list : IntrusiveList
+  sketch : Sketch
+  doorkeeper : @hashmap.HashMap[Int64, Unit]
+}
+pub fn Tinylfu::admit(Self, Int64, Int64) -> Array[Int64]
+pub fn Tinylfu::forget(Self, Int64) -> Unit
+pub fn Tinylfu::hit(Self, Int64) -> Unit
+pub fn Tinylfu::size(Self) -> Int32
+pub impl Policy for Tinylfu
+
+// Type aliases
+
+// Traits
+pub(open) trait Policy {
+  fn hit(Self, Int64) -> Unit
+  fn admit(Self, Int64, Int64) -> Array[Int64]
+  fn forget(Self, Int64) -> Unit
+  fn size(Self) -> Int32
+}

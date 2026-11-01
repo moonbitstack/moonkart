@@ -1,39 +1,164 @@
 # moonkart
 
-A cache for MoonBit: bounded by count or weight, with expiry, loaders and eviction listeners.
+A cache for MoonBit. It is bounded by entry count or by total weight, it can
+expire entries on a schedule you control, it computes missing values on demand,
+and it tells you what left the cache and why. The eviction strategy is a type
+parameter, so you can use the ones it ships with or supply your own.
 
 ```moonbit
-@moonkart.greet("moonbit")
+let cache = @moonkart.lru_cache(cap=1000)
+cache.set("answer", 42)
+
+match cache.get("answer") {
+  Some(value) => println("hit: \{value}")
+  None => println("miss")
+}
 ```
 
-Run `moon run src/examples/tour` for the whole surface in one go.
+## Install
 
-## Starting from this template
+```bash
+moon add moonbitstack/moonkart
+```
 
-1. `gh repo create moonbitstack/<name> --template moonbitstack/moonkit --public`
-2. Replace `moonkart` everywhere: `moon.mod` (name and repository), the
-   `moon.pkg` files and sources that import the library, and this file's title.
-3. The library is the root package in `src/`, so users write `@<name>.f`. Split it
-   into subpackages named after what they do (`base64/`, `sha2/`, `jwt/`) only
-   where a user would want one without the rest. Delete `src/cmd/` if the
-   repository ships no binary.
-4. Fill in `keywords` and `description` in `moon.mod`. The description is what
-   mooncakes shows, so it says what the package is and what it is not.
-5. Write the specification link into every `moon.pkg`.
+Then import it in a package:
 
-## What is here and what is not
+```moonbit
+import {
+  "moonbitstack/moonkart",
+}
+```
 
-| Carried | Why |
+## Choosing an eviction policy
+
+Every constructor returns a `Cache[K, V, P]` where `P` is the policy. The policy
+decides which entry leaves when the cache is full.
+
+| Constructor | Policy | Good at |
+|:--|:--|:--|
+| `tinylfu_cache` | W-TinyLFU (frequency + recency) | general workloads; keeps frequently used entries |
+| `lru_cache` | least recently used | simple, predictable recency |
+| `s3fifo_cache` | second-chance FIFO | scan floods and one-hit wonders |
+
+`tinylfu_cache`, `lru_cache` and `s3fifo_cache` share the same knobs; use
+`new(policy, ...)` with your own policy if none of these fit.
+
+## Capacity
+
+Bound the cache by entry count with `cap`, or by total weight with
+`max_weight` plus a `weigher`:
+
+```moonbit
+// At most 500 entries.
+let by_count = @moonkart.lru_cache(cap=500)
+
+// At most 10 MiB, where the weight is the byte length of the value.
+let by_weight = @moonkart.lru_cache(
+  max_weight=10L * 1024L * 1024L,
+  weigher=fn(_key, bytes) { bytes.length().to_int64() },
+)
+```
+
+Without a weigher every entry weighs one, so `cap` and `max_weight` mean the
+same thing.
+
+## Expiry
+
+Expiry deadlines are absolute nanosecond timestamps produced by a clock you
+supply. The cache never reads the wall clock itself, so tests are deterministic
+and do not sleep.
+
+```moonbit
+// Time-to-live from the moment of writing; reads do not extend it.
+let ttl_cache = @moonkart.lru_cache(cap=1000, expiry=@moonkart.ttl(60_000_000_000L))
+
+// Time-to-idle: every read restarts the countdown.
+let tti_cache = @moonkart.lru_cache(cap=1000, expiry=@moonkart.tti(30_000_000_000L))
+```
+
+`ttl` and `tti` are shorthands over the `Expiry` record, whose `after_create`,
+`after_read` and `after_update` callbacks compute per-entry deadlines. Pass your
+own `clock` to move time under test:
+
+```moonbit
+let now : @ref.Ref[Int64] = @ref.Ref(0L)
+let cache = @moonkart.lru_cache(cap=10, expiry=@moonkart.ttl(1_000_000_000L), clock=fn() { now.val })
+```
+
+## Loading
+
+`get_with` runs a loader only on a miss and stores its result; `try_get_with`
+lets the loader return `None` for "no value", which is not cached.
+
+```moonbit
+let user = cache.get_with(user_id, fn(id) { fetch_user(id) })
+```
+
+## Invalidation
+
+```moonbit
+cache.invalidate(key)          // one key, returns whether it was present
+cache.invalidate_all()         // everything
+cache.invalidate_if(fn(k, v) { v.is_stale() })   // by predicate, returns how many
+```
+
+## Events and statistics
+
+A removal listener is told about every entry that leaves, with the reason:
+`Capacity`, `Expired`, `Explicit` or `Replaced`.
+
+```moonbit
+let cache = @moonkart.lru_cache(
+  cap=1000,
+  removal_listener=fn(key, _value, reason) {
+    println("\{key} left: \{reason}")
+  },
+)
+```
+
+`cache.stats()` returns counters for hits, misses, evictions, evicted weight,
+successful and failed loads, and the total time spent in loaders.
+
+## Custom policies
+
+`@moonkart.policy.Policy` is an open trait. A policy only ever sees opaque
+numeric entry ids and weights, never your keys or values. Implement `hit`,
+`admit`, `forget` and `size` for your own type and build a cache with `new`:
+
+```moonbit
+let cache = @moonkart.new(@my_policy.Policy::new())
+```
+
+## API
+
+| Item | Meaning |
 |:--|:--|
-| `.github/workflows/` | GitHub does not inherit workflows; every repository needs its own copy |
-| `moon.mod`, `src/`, `src/cmd/main/`, `src/examples/tour/` | Sources under `src/` so the root holds only entry points; the library is the root package, the binary and the examples sit beside it |
-| `.gitignore`, `.moonignore` | The second one exists because `.gitignore`'s `!.git*` would otherwise pull the whole object database into a published tarball |
-| `LICENSE` | Apache-2.0, the same across the organisation |
+| `lru_cache`, `s3fifo_cache`, `tinylfu_cache` | constructors for the shipped policies |
+| `new(policy, ...)` | construct with any policy |
+| `new_with_config(policy, config)` | construct from a `Config` bundle |
+| `default_config()` | defaults for every optional knob |
+| `ttl(ns)`, `tti(ns)` | expiry shorthands |
+| `system_clock` | the default clock, from the runtime |
+| `set(key, value)` | insert or replace |
+| `get(key)` | read, or `None` |
+| `contains(key)` | presence, ignoring nothing |
+| `entry(key)`, `entry_or_null(key)` | snapshot of an entry |
+| `remove(key)`, `invalidate(key)` | remove one, returns whether it was present |
+| `invalidate_all()`, `invalidate_if(pred)` | remove many |
+| `get_with(key, loader)`, `try_get_with(key, loader)` | load on miss |
+| `stats()`, `size()`, `policy_size()` | counters and sizes |
 
-**Issue and pull-request templates are not here.** The organisation's `.github`
-repository supplies them to every repository that has none of its own; a copy
-here would shadow that one and then drift from it. A repository adds its own
-only when it needs something the organisation's does not cover.
+## Determinism
+
+Because the clock is a parameter and every deadline is absolute, an expiry test
+moves a `Ref` and never sleeps. See `src/cache_test.mbt` for the suite, and
+`src/examples/` for runnable programs:
+
+```bash
+moon run src/examples/tour
+moon run src/examples/01-expiry
+moon run src/examples/02-loading
+```
 
 ## The gate
 
@@ -44,15 +169,8 @@ moon clean && moon fmt && moon check --target all --deny-warn \
   && moon build --target all && moon test --target all
 ```
 
-Before a release, `moon info --target all && git diff --exit-code` as well: the
-generated interface is checked in, and a difference means the interface moved
-without anyone saying so.
-
-## Releasing
-
-Push a signed tag `v<version>`. `release.yml` runs the tests first and publishes
-only if they pass and the organisation variable `MOONCAKES_PUBLISH` is `true`.
-The major version stays at 0.
+The generated interface is checked in; `moon info --target all && git diff
+--exit-code` must be clean before a release.
 
 ## Licence
 
