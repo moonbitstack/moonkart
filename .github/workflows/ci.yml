@@ -54,6 +54,10 @@ jobs:
             fi
           done
 
+      - name: generated wrappers are fresh
+        if: runner.os == 'Linux'
+        run: moon run src/cmd/cached --target native -- -C . src/examples/03-cached/slow.mbt -o src/examples/03-cached/slow.g.mbt --check
+
       - name: lint (fmt is clean)
         run: |
           moon fmt && git diff --exit-code

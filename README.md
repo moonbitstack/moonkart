@@ -94,6 +94,43 @@ lets the loader return `None` for "no value", which is not cached.
 let user = cache.get_with(user_id, fn(id) { fetch_user(id) })
 ```
 
+## Remembering a function
+
+`#kart.cached` is `functools.lru_cache` for MoonBit. The function stays as it is, and
+the generator adds a remembering one beside it:
+
+```moonbit
+#kart.cached(capacity="1024", policy="lru", ttl="60s")
+pub fn lookup(id : Int) -> String {
+  expensive(id)
+}
+```
+
+`lookup_cached(id)` reads through the cache and `lookup_cached_clear()` empties it. The
+parameters are the key, several of them a tuple. `capacity` is 128 when nothing says,
+`policy` is `tinylfu`, `lru` or `s3fifo`, `ttl` and `tti` are durations such as `250ms`,
+`60s`, `5m` or `1h`, and `name` renames the function. An `async fn` goes through the
+asynchronous cache. A function that raises is refused, since there is nothing to keep
+when it does.
+
+The generator wires in as a dev_build rule, in `moon.mod`:
+
+<!-- nocheck -->
+```
+rule(name: "cached", command: "moonx moonbitstack/moonkart/cmd/cached -C \"$mod_dir\" \"$input\" -o \"$output\"")
+```
+
+and in the `moon.pkg` of the package, which imports `moonbitstack/moonkart` and
+`moonbitstack/moonkart/policy`:
+
+<!-- nocheck -->
+```
+dev_build(rule: "cached", input: "slow.mbt", output: "slow.g.mbt")
+formatter(ignore: [ "slow.g.mbt" ])
+```
+
+`moon run src/examples/03-cached` shows it.
+
 ## The asynchronous cache
 
 `@moonkart.concurrent.AsyncCache` wraps any cache so that loads can be awaited.

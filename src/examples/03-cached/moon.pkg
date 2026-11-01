@@ -1,0 +1,10 @@
+// Functions remembered with `#kart.cached`. `slow.g.mbt` comes from `cmd/cached`; a
+// project wires it as a dev_build rule.
+import {
+  "moonbitstack/moonkart",
+  "moonbitstack/moonkart/policy",
+}
+
+pkgtype(kind: "executable")
+
+formatter(ignore: [ "slow.g.mbt" ])
