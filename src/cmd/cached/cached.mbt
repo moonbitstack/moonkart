@@ -48,13 +48,13 @@ fn kart_attrs(
 /// cache's clock runs in.
 fn nanos(text : String, where_ : String) -> Int64 raise {
   let (digits, scale) = if text.has_suffix("ms") {
-    (text.view(end_offset=text.length() - 2), 1000000L)
+    (text.exact_view(end=text.length() - 2), 1000000L)
   } else if text.has_suffix("s") {
-    (text.view(end_offset=text.length() - 1), 1000000000L)
+    (text.exact_view(end=text.length() - 1), 1000000000L)
   } else if text.has_suffix("m") {
-    (text.view(end_offset=text.length() - 1), 60000000000L)
+    (text.exact_view(end=text.length() - 1), 60000000000L)
   } else if text.has_suffix("h") {
-    (text.view(end_offset=text.length() - 1), 3600000000000L)
+    (text.exact_view(end=text.length() - 1), 3600000000000L)
   } else {
     fail(
       "\{where_}: `\{text}` is not a duration: write `250ms`, `60s`, `5m` or `1h`",
