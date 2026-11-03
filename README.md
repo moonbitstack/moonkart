@@ -2,8 +2,9 @@
 
 A cache for MoonBit. It is bounded by entry count or by total weight, it can
 expire entries on a schedule you control, it computes missing values on demand,
-and it tells you what left the cache and why. The eviction strategy is a type
-parameter, so you can use the ones it ships with or supply your own.
+and it tells you what left the cache and why. The eviction strategy is erased
+behind an open contract, so every constructor returns the same `Cache[K, V]`
+type and a third-party policy plugs in without changing it.
 
 ```moonbit
 let cache = @moonkart.lru_cache(cap=1000)
@@ -31,8 +32,9 @@ import {
 
 ## Choosing an eviction policy
 
-Every constructor returns a `Cache[K, V, P]` where `P` is the policy. The policy
-decides which entry leaves when the cache is full.
+Every constructor returns a `Cache[K, V]`. The policy decides which entry leaves
+when the cache is full; it is hidden behind the `Policy` contract, so the cache
+type does not change when you switch strategies.
 
 | Constructor | Policy | Good at |
 |:--|:--|:--|
@@ -87,11 +89,19 @@ let cache = @moonkart.lru_cache(cap=10, expiry=@moonkart.ttl(1_000_000_000L), cl
 
 ## Loading
 
-`get_with` runs a loader only on a miss and stores its result; `try_get_with`
-lets the loader return `None` for "no value", which is not cached.
+`get_with` runs a loader only on a miss and stores its result. The loader may
+raise; a raised error is not cached and reaches the caller. `try_get_with` lets
+the loader return `None` for "no value", which is not cached either.
 
 ```moonbit
-let user = cache.get_with(user_id, fn(id) { fetch_user(id) })
+let user = cache.get_with(user_id, fn(id) raise { fetch_user(id) })
+```
+
+When the loader cannot fail, wrap it with `infallible_loader` so the call site
+needs no error handling:
+
+```moonbit
+let parsed = cache.get_with(text, @moonkart.infallible_loader(fn(t) { parse(t) }))
 ```
 
 ## Remembering a function
@@ -134,8 +144,8 @@ formatter(ignore: [ "slow.g.mbt" ])
 ## The asynchronous cache
 
 `@moonkart.concurrent.AsyncCache` wraps any cache so that loads can be awaited.
-Concurrent readers of one key share a single loader instead of each computing
-the value.
+Concurrent readers of one key share a single loader; readers of different keys
+never wait on each other, and no lock is held while a loader runs.
 
 ```moonbit
 import {
@@ -149,10 +159,12 @@ let cache = @concurrent.AsyncCache::new(@moonkart.lru_cache(cap=1000))
 let user = cache.get_with(id, async fn(id) { fetch_user(id) })
 ```
 
-The first task holds a mutex while its loader runs; later tasks wait, re-check
-the cache under the lock, and return the stored value. Three concurrent readers
-of one key call the loader exactly once. `concurrent` builds on the synchronous
-core unchanged, so every policy, expiry rule and counter carries over.
+The first task to miss records a per-key in-flight load and awaits it; later
+tasks asking for the same key await the same result. A loader that raises
+delivers its error to every waiter and leaves nothing in the cache, so the next
+call retries. Three concurrent readers of one key call the loader exactly once.
+`concurrent` builds on the synchronous core unchanged, so every policy, expiry
+rule and counter carries over.
 
 ## Hybrid memory and disk (native)
 
@@ -212,8 +224,8 @@ successful and failed loads, and the total time spent in loaders.
 
 ## Custom policies
 
-`@moonkart.policy.Policy` is an open trait. A policy only ever sees opaque
-numeric entry ids and weights, never your keys or values. Implement `hit`,
+`@moonkart.policy.Policy` is an open trait. A policy sees opaque numeric entry
+ids, weights and the key's hash, never the keys or values. Implement `hit`,
 `admit`, `forget` and `size` for your own type and build a cache with `new`:
 
 ```moonbit
@@ -236,7 +248,8 @@ let cache = @moonkart.new(@my_policy.Policy::new())
 | `entry(key)`, `entry_or_null(key)` | snapshot of an entry |
 | `remove(key)`, `invalidate(key)` | remove one, returns whether it was present |
 | `invalidate_all()`, `invalidate_if(pred)` | remove many |
-| `get_with(key, loader)`, `try_get_with(key, loader)` | load on miss |
+| `get_with(key, loader)`, `try_get_with(key, loader)` | load on miss; the loader may raise |
+| `infallible_loader(loader)` | adapt a loader that cannot fail |
 | `stats()`, `size()`, `policy_size()` | counters and sizes |
 
 ## Determinism
