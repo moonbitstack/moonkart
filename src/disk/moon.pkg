@@ -1,16 +1,16 @@
 // Native-only persistence: an append log on disk behind a memory cache.
 import {
   "moonbitstack/moonkart",
-  "moonbitlang/core/async",
-  "moonbitlang/core/async/fs",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/io",
   "moonbitlang/core/buffer",
 }
 
 options(
-  targets: { "disk_native.mbt": [ "native" ] },
+  targets: {
+    "disk_native.mbt": [ "native" ],
+    "disk_native_wbtest.mbt": [ "native" ],
+  },
   warnings: "-29",
-  "allow-experimental-packages": [
-    "moonbitlang/core/async",
-    "moonbitlang/core/async/fs",
-  ],
 )

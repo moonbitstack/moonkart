@@ -55,7 +55,7 @@ pub async fn[K : Eq + Hash, V] DiskCache::open(
   if @fs.exists(disk.path) {
     replay(disk)
   } else {
-    @fs.write_binary(disk.path, empty_view(), append=false)
+    @fs.write_file(disk.path, empty_view())
   }
   disk
 }
@@ -105,7 +105,12 @@ pub async fn[K : Eq + Hash, V] DiskCache::set(
   write_put(buf, self.encode_key, self.encode_value, key, value)
   self.write_lock.acquire()
   defer self.write_lock.release()
-  @fs.write_binary(self.path, buf.to_bytes().exact_view(), append=true)
+  @fs.write_file(
+    self.path,
+    buf.to_bytes().exact_view(),
+    create_mode=OpenOrCreate,
+    append=true,
+  )
 }
 
 ///|
@@ -120,7 +125,12 @@ pub async fn[K : Eq + Hash, V] DiskCache::remove(
     write_del(buf, self.encode_key, key)
     self.write_lock.acquire()
     defer self.write_lock.release()
-    @fs.write_binary(self.path, buf.to_bytes().exact_view(), append=true)
+    @fs.write_file(
+      self.path,
+      buf.to_bytes().exact_view(),
+      create_mode=OpenOrCreate,
+      append=true,
+    )
   }
   existed
 }
@@ -135,7 +145,7 @@ pub async fn[K, V] DiskCache::compact(self : DiskCache[K, V]) -> Unit {
   for pair in self.cache.to_array() {
     write_put(buf, self.encode_key, self.encode_value, pair.0, pair.1)
   }
-  @fs.write_binary(self.path, buf.to_bytes().exact_view(), append=false)
+  @fs.write_file(self.path, buf.to_bytes().exact_view())
 }
 
 ///|
@@ -183,7 +193,7 @@ fn read_i32_le(view : BytesView, off : Int32) -> Int32 {
 
 ///|
 async fn[K : Eq + Hash, V] replay(disk : DiskCache[K, V]) -> Unit {
-  let data = @fs.read_binary(disk.path)
+  let data = @fs.read_file(disk.path).binary()
   let view = data.exact_view()
   let total = view.length()
   let mut off : Int32 = 0
