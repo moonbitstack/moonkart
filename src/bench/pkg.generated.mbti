@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitstack/moonkart/bench"
+
+// Values
+pub fn hit_rate(Array[Int32], String, Int64) -> Double
+
+pub fn parse_keys(String) -> Array[Int32]
+
+pub fn replay_stats(Array[Int32], String, Int64) -> (Double, Int64, Int32)
+
+pub fn truncated_oltp() -> Array[Int32]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

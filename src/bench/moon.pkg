@@ -1,0 +1,4 @@
+// Trace replay for hit-rate evaluation.
+import {
+  "moonbitstack/moonkart",
+}
