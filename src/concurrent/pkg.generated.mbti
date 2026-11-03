@@ -2,9 +2,7 @@
 package "moonbitstack/moonkart/concurrent"
 
 import {
-  "moonbitlang/core/async",
   "moonbitstack/moonkart",
-  "moonbitstack/moonkart/policy",
 }
 
 // Values
@@ -12,15 +10,15 @@ import {
 // Errors
 
 // Types and methods
-pub struct AsyncCache[K, V, P] {
-  inner : @moonkart.Cache[K, V, P]
-  fill : @async.Mutex
+pub struct AsyncCache[K, V] {
+  // private fields
 }
-pub fn[K : Eq + Hash, V, P : @policy.Policy] AsyncCache::get(Self[K, V, P], K) -> V?
-pub async fn[K : Eq + Hash, V, P : @policy.Policy] AsyncCache::get_with(Self[K, V, P], K, async (K) -> V) -> V
-pub fn[K, V, P] AsyncCache::inner(Self[K, V, P]) -> @moonkart.Cache[K, V, P]
-pub fn[K, V, P] AsyncCache::new(@moonkart.Cache[K, V, P]) -> Self[K, V, P]
-pub async fn[K : Eq + Hash, V, P : @policy.Policy] AsyncCache::set(Self[K, V, P], K, V) -> Unit
+pub fn[K : Eq + Hash, V] AsyncCache::get(Self[K, V], K) -> V?
+pub async fn[K : Eq + Hash, V] AsyncCache::get_with(Self[K, V], K, async (K) -> V) -> V
+pub fn[K, V] AsyncCache::inner(Self[K, V]) -> @moonkart.Cache[K, V]
+pub fn[K : Eq + Hash, V] AsyncCache::new(@moonkart.Cache[K, V]) -> Self[K, V]
+pub fn[K : Eq + Hash, V] AsyncCache::set(Self[K, V], K, V) -> Unit
+pub async fn[K : Eq + Hash, V] AsyncCache::try_get_with(Self[K, V], K, async (K) -> V?) -> V?
 
 // Type aliases
 

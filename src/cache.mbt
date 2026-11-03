@@ -5,9 +5,8 @@
 /// Internal mutable state. The cache is a handle: every method receives a copy
 /// of the struct but the copy shares this single heap state through a `Ref`, so
 /// counters and entries accumulate across calls.
-pub struct State[K, V, P] {
-  policy : P
-  max_weight : Int64
+priv struct State[K, V] {
+  policy : &@policy.Policy
   weigher : Weigher[K, V]?
   clock : Clock
   expiry : Expiry[K, V]?
@@ -19,7 +18,7 @@ pub struct State[K, V, P] {
 }
 
 ///|
-pub struct Slot[V] {
+priv struct Slot[V] {
   id : Int64
   value : V
   weight : Int64
@@ -27,51 +26,27 @@ pub struct Slot[V] {
 }
 
 ///|
-/// A bounded cache generic over key `K`, value `V` and an eviction `Policy`.
+/// A bounded cache generic over key `K` and value `V`. The eviction strategy is
+/// erased behind the open `Policy` contract, so one `Cache` type serves every
+/// strategy; [`new`] accepts a third-party policy without changing this type.
 ///
-/// The default policy is W-TinyLFU (see `tinylfu_cache`); `lru_cache` and
-/// `s3fifo_cache` provide the other shipped strategies. Bring your own by
-/// implementing the open `Policy` trait from `@moonkart.policy`.
-pub struct Cache[K, V, P] {
-  state : Ref[State[K, V, P]]
+/// The default strategy, chosen by [`tinylfu_cache`], is W-TinyLFU; [`lru_cache`]
+/// and [`s3fifo_cache`] provide the other shipped strategies.
+pub struct Cache[K, V] {
+  priv state : Ref[State[K, V]]
 }
 
 ///|
-/// Bundles the optional knobs of a cache so they can be reused or built once.
-pub struct Config[K, V] {
-  max_weight : Int64?
-  weigher : Weigher[K, V]?
-  clock : Clock
-  expiry : Expiry[K, V]?
-  removal_listener : RemovalListener[K, V]?
-}
-
-///|
-/// A config with every optional knob left at its default: unbounded, no weigher,
-/// the system clock, no expiry, no listener.
-pub fn[K, V] default_config() -> Config[K, V] {
-  {
-    max_weight: None,
-    weigher: None,
-    clock: system_clock,
-    expiry: None,
-    removal_listener: None,
-  }
-}
-
-///|
-fn[K : Eq + Hash, V, P] build(
-  policy : P,
-  max_weight : Int64?,
+fn[K : Eq + Hash, V] build(
+  policy : &@policy.Policy,
   weigher : Weigher[K, V]?,
   clock : Clock,
   expiry : Expiry[K, V]?,
   removal_listener : RemovalListener[K, V]?,
-) -> Cache[K, V, P] {
+) -> Cache[K, V] {
   {
     state: @ref.Ref({
       policy,
-      max_weight: max_weight.unwrap_or(0),
       weigher,
       clock,
       expiry,
@@ -93,14 +68,13 @@ fn[K : Eq + Hash, V, P] build(
 }
 
 ///|
-/// Builds a cache from a policy and a config bundle.
-pub fn[K : Eq + Hash, V, P] new_with_config(
-  policy : P,
+/// Builds a cache from a policy and a [`Config`] bundle.
+pub fn[K : Eq + Hash, V] new_with_config(
+  policy : &@policy.Policy,
   config : Config[K, V],
-) -> Cache[K, V, P] {
+) -> Cache[K, V] {
   build(
     policy,
-    config.max_weight,
     config.weigher,
     config.clock,
     config.expiry,
@@ -109,19 +83,16 @@ pub fn[K : Eq + Hash, V, P] new_with_config(
 }
 
 ///|
-/// Builds a cache from a policy and optional knobs. `max_weight` bounds total
-/// weight; when a `weigher` is supplied, pass `max_weight`, otherwise pass
-/// `cap` to the policy presets to bound entry count (each entry then weighs
-/// one).
-pub fn[K : Eq + Hash, V, P] new(
-  policy : P,
-  max_weight? : Int64,
+/// Builds a cache from a policy and the individual knobs. Capacity belongs to
+/// the policy: pass `cap` or `max_weight` to the policy preset, not here.
+pub fn[K : Eq + Hash, V] new(
+  policy : &@policy.Policy,
   weigher? : Weigher[K, V],
   clock~ : Clock = system_clock,
   expiry? : Expiry[K, V],
   removal_listener? : RemovalListener[K, V],
-) -> Cache[K, V, P] {
-  build(policy, max_weight, weigher, clock, expiry, removal_listener)
+) -> Cache[K, V] {
+  build(policy, weigher, clock, expiry, removal_listener)
 }
 
 ///|
@@ -133,15 +104,13 @@ pub fn[K : Eq + Hash, V] lru_cache(
   clock~ : Clock = system_clock,
   expiry? : Expiry[K, V],
   removal_listener? : RemovalListener[K, V],
-) -> Cache[K, V, @policy.Lru] {
-  let eff = max_weight.unwrap_or(cap.unwrap_or(0))
-  build(
+) -> Cache[K, V] {
+  new(
     @policy.new_lru(cap?, max_weight?),
-    Some(eff),
-    weigher,
-    clock,
-    expiry,
-    removal_listener,
+    weigher?,
+    clock~,
+    expiry?,
+    removal_listener?,
   )
 }
 
@@ -156,46 +125,42 @@ pub fn[K : Eq + Hash, V] s3fifo_cache(
   clock~ : Clock = system_clock,
   expiry? : Expiry[K, V],
   removal_listener? : RemovalListener[K, V],
-) -> Cache[K, V, @policy.S3Fifo] {
-  let eff = max_weight.unwrap_or(cap.unwrap_or(0))
-  build(
+) -> Cache[K, V] {
+  new(
     @policy.new_s3fifo(cap?, max_weight?),
-    Some(eff),
-    weigher,
-    clock,
-    expiry,
-    removal_listener,
+    weigher?,
+    clock~,
+    expiry?,
+    removal_listener?,
   )
 }
 
 ///|
-/// A cache using the W-TinyLFU policy (the default): a small admission window
-/// feeds a frequency-guarded segmented LRU, so frequently used entries survive
-/// even after they age out of recency.
+/// A cache using W-TinyLFU (the default): a small admission window feeds a
+/// frequency-guarded segmented LRU, so frequently used entries survive even
+/// after they age out of recency.
 pub fn[K : Eq + Hash, V] tinylfu_cache(
   cap? : Int64,
   max_weight? : Int64,
-  window_ratio~ : Double = 0.01,
-  protected_ratio~ : Double = 0.8,
+  window_ratio~ : Double = @policy.tinylfu_window_ratio,
+  protected_ratio~ : Double = @policy.tinylfu_protected_ratio,
   weigher? : Weigher[K, V],
   clock~ : Clock = system_clock,
   expiry? : Expiry[K, V],
   removal_listener? : RemovalListener[K, V],
-) -> Cache[K, V, @policy.Tinylfu] {
-  let eff = max_weight.unwrap_or(cap.unwrap_or(0))
-  build(
+) -> Cache[K, V] {
+  new(
     @policy.new_tinylfu(cap?, max_weight?, window_ratio~, protected_ratio~),
-    Some(eff),
-    weigher,
-    clock,
-    expiry,
-    removal_listener,
+    weigher?,
+    clock~,
+    expiry?,
+    removal_listener?,
   )
 }
 
 ///|
-fn[K, V, P] notify(
-  s : State[K, V, P],
+fn[K, V] notify(
+  s : State[K, V],
   key : K,
   value : V,
   reason : EvictionReason,
@@ -207,8 +172,8 @@ fn[K, V, P] notify(
 }
 
 ///|
-fn[K : Eq + Hash, V, P : @policy.Policy] remove_slot(
-  st : Ref[State[K, V, P]],
+fn[K : Eq + Hash, V] remove_slot(
+  st : Ref[State[K, V]],
   key : K,
   slot : Slot[V],
   reason : EvictionReason,
@@ -220,8 +185,8 @@ fn[K : Eq + Hash, V, P : @policy.Policy] remove_slot(
 }
 
 ///|
-fn[K : Eq + Hash, V, P] process_evicted(
-  st : Ref[State[K, V, P]],
+fn[K : Eq + Hash, V] process_evicted(
+  st : Ref[State[K, V]],
   evicted : Array[Int64],
   self_id : Int64,
 ) -> Bool {
@@ -251,8 +216,8 @@ fn[K : Eq + Hash, V, P] process_evicted(
 }
 
 ///|
-fn[K : Eq + Hash, V, P] refresh_read(
-  st : Ref[State[K, V, P]],
+fn[K : Eq + Hash, V] refresh_read(
+  st : Ref[State[K, V]],
   key : K,
   slot : Slot[V],
   now : Int64,
@@ -275,9 +240,10 @@ fn[K : Eq + Hash, V, P] refresh_read(
 
 ///|
 /// Inserts or replaces `key`. A replaced value is reported to the removal
-/// listener as `Replaced`.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::set(
-  self : Cache[K, V, P],
+/// listener as `Replaced`; an insertion calls `after_update` when the key was
+/// already present, otherwise `after_create`.
+pub fn[K : Eq + Hash, V] Cache::set(
+  self : Cache[K, V],
   key : K,
   value : V,
 ) -> Unit {
@@ -287,23 +253,27 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::set(
     Some(w) => w(key, value)
     None => 1
   }
-  let expire_at = match st.val.expiry {
-    Some(e) => (e.after_create)(key, value, now)
-    None => None
-  }
-  match st.val.entries.get(key) {
-    Some(slot) => {
-      ignore(st.val.id_to_key.remove(slot.id))
-      st.val.policy.forget(slot.id)
-      notify(st.val, key, slot.value, Replaced)
+  let expire_at = match st.val.entries.get(key) {
+    Some(old) => {
+      ignore(st.val.id_to_key.remove(old.id))
+      st.val.policy.forget(old.id)
+      notify(st.val, key, old.value, Replaced)
+      match st.val.expiry {
+        Some(e) => (e.after_update)(key, value, now, old.expire_at)
+        None => None
+      }
     }
-    None => ()
+    None =>
+      match st.val.expiry {
+        Some(e) => (e.after_create)(key, value, now)
+        None => None
+      }
   }
   let id = st.val.next_id
   st.val.next_id = st.val.next_id + 1
-  st.val.entries.set(key, { id, value, weight, expire_at, })
-  st.val.id_to_key.set(id, key)
-  let evicted = st.val.policy.admit(id, weight)
+  ignore(st.val.entries.set(key, { id, value, weight, expire_at, }))
+  ignore(st.val.id_to_key.set(id, key))
+  let evicted = st.val.policy.admit(id, weight, Hash::hash(key))
   let refused = process_evicted(st, evicted, id)
   if refused {
     ignore(st.val.entries.remove(key))
@@ -315,10 +285,7 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::set(
 /// Returns the value for `key`, or `None` if absent or expired. A successful
 /// read counts a hit and bumps the entry's recency; an expired or missing read
 /// counts a miss.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::get(
-  self : Cache[K, V, P],
-  key : K,
-) -> V? {
+pub fn[K : Eq + Hash, V] Cache::get(self : Cache[K, V], key : K) -> V? {
   let st = self.state
   let now = (st.val.clock)()
   match st.val.entries.get(key) {
@@ -336,13 +303,13 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::get(
           } else {
             refresh_read(st, key, slot, now)
             st.val.stats.hit_count += 1
-            st.val.policy.hit(slot.id)
+            st.val.policy.hit(slot.id, Hash::hash(key))
             Some(slot.value)
           }
         None => {
           refresh_read(st, key, slot, now)
           st.val.stats.hit_count += 1
-          st.val.policy.hit(slot.id)
+          st.val.policy.hit(slot.id, Hash::hash(key))
           Some(slot.value)
         }
       }
@@ -351,11 +318,9 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::get(
 
 ///|
 /// Whether `key` is present and not expired. Expired entries are purged and
-/// report as absent.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::contains(
-  self : Cache[K, V, P],
-  key : K,
-) -> Bool {
+/// report as absent. This is a presence check: it neither refreshes a
+/// time-to-idle deadline nor counts a hit.
+pub fn[K : Eq + Hash, V] Cache::contains(self : Cache[K, V], key : K) -> Bool {
   let st = self.state
   let now = (st.val.clock)()
   match st.val.entries.get(key) {
@@ -377,8 +342,8 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::contains(
 ///|
 /// Returns a snapshot of the entry for `key`, or `None`. The snapshot is a copy
 /// detached from the cache.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::entry_or_null(
-  self : Cache[K, V, P],
+pub fn[K : Eq + Hash, V] Cache::entry_or_null(
+  self : Cache[K, V],
   key : K,
 ) -> Entry[K, V]? {
   let st = self.state
@@ -413,8 +378,8 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::entry_or_null(
 ///|
 /// Returns a snapshot of the entry for `key`. Panics if the key is absent or
 /// expired; prefer `entry_or_null` when absence is expected.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::entry(
-  self : Cache[K, V, P],
+pub fn[K : Eq + Hash, V] Cache::entry(
+  self : Cache[K, V],
   key : K,
 ) -> Entry[K, V] {
   match self.entry_or_null(key) {
@@ -425,10 +390,7 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::entry(
 
 ///|
 /// Removes `key` explicitly. Returns whether it was present.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::remove(
-  self : Cache[K, V, P],
-  key : K,
-) -> Bool {
+pub fn[K : Eq + Hash, V] Cache::remove(self : Cache[K, V], key : K) -> Bool {
   let st = self.state
   match st.val.entries.get(key) {
     None => false
@@ -441,18 +403,13 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::remove(
 
 ///|
 /// Removes `key` explicitly (alias of `remove`). Returns whether it was present.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::invalidate(
-  self : Cache[K, V, P],
-  key : K,
-) -> Bool {
+pub fn[K : Eq + Hash, V] Cache::invalidate(self : Cache[K, V], key : K) -> Bool {
   self.remove(key)
 }
 
 ///|
 /// Removes every entry, reporting each to the removal listener as `Explicit`.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::invalidate_all(
-  self : Cache[K, V, P],
-) -> Unit {
+pub fn[K : Eq + Hash, V] Cache::invalidate_all(self : Cache[K, V]) -> Unit {
   let st = self.state
   let pairs = st.val.entries.to_array()
   for p in pairs {
@@ -467,8 +424,8 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::invalidate_all(
 ///|
 /// Removes every entry for which `pred(key, value)` is true. Returns the number
 /// removed.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::invalidate_if(
-  self : Cache[K, V, P],
+pub fn[K : Eq + Hash, V] Cache::invalidate_if(
+  self : Cache[K, V],
   pred : (K, V) -> Bool,
 ) -> Int64 {
   let st = self.state
@@ -492,97 +449,95 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::invalidate_if(
 
 ///|
 /// A copy of the running counters.
-pub fn[K, V, P] Cache::stats(self : Cache[K, V, P]) -> CacheStats {
+pub fn[K, V] Cache::stats(self : Cache[K, V]) -> CacheStats {
   self.state.val.stats
 }
 
 ///|
 /// Number of entries currently stored.
-pub fn[K, V, P] Cache::size(self : Cache[K, V, P]) -> Int64 {
-  Int64::from_int(self.state.val.entries.length())
+pub fn[K, V] Cache::size(self : Cache[K, V]) -> Int64 {
+  self.state.val.entries.length().to_int64()
 }
 
 ///|
 /// Number of entries the eviction policy currently tracks (equals `size`).
-pub fn[K, V, P : @policy.Policy] Cache::policy_size(
-  self : Cache[K, V, P],
-) -> Int32 {
+pub fn[K, V] Cache::policy_size(self : Cache[K, V]) -> Int32 {
   self.state.val.policy.size()
 }
 
 ///|
 /// A snapshot of every live entry as `(key, value)` pairs, in no particular
 /// order. Useful for persistence and for tests.
-pub fn[K, V, P] Cache::to_array(self : Cache[K, V, P]) -> Array[(K, V)] {
+pub fn[K, V] Cache::to_array(self : Cache[K, V]) -> Array[(K, V)] {
   self.state.val.entries.to_array().map(fn(p) { (p.0, p.1.value) })
 }
 
 ///|
-fn[K : Eq + Hash, V, P : @policy.Policy] load_value(
-  cache : Cache[K, V, P],
-  key : K,
-  loader : (K) -> V,
-) -> V {
-  let st = cache.state
-  let start = (st.val.clock)()
-  let result = loader(key)
-  let end = (st.val.clock)()
-  st.val.stats.total_load_time += end - start
-  st.val.stats.load_success_count += 1
-  cache.set(key, result)
-  result
+/// Adapts an infallible loader to the raising loader type [`get_with`] and
+/// [`try_get_with`] accept. Use it when producing a value cannot fail, so the
+/// call site needs no error handling while still sharing one read path.
+#warnings("-unused_error_type")
+pub fn[K, V] infallible_loader(loader : (K) -> V) -> (K) -> V raise {
+  fn(k) raise { loader(k) }
 }
 
 ///|
-fn[K : Eq + Hash, V, P : @policy.Policy] load_opt(
-  cache : Cache[K, V, P],
+/// Returns the value for `key`. On a miss, runs `loader(key)` and stores the
+/// result. The loader may raise; a raised error is not cached, is counted as a
+/// load failure, and is handed to the caller unchanged.
+pub fn[K : Eq + Hash, V, E : Error] Cache::get_with(
+  self : Cache[K, V],
   key : K,
-  loader : (K) -> V?,
-) -> V? {
-  let st = cache.state
-  let start = (st.val.clock)()
-  let result = loader(key)
-  let end = (st.val.clock)()
-  match result {
-    Some(v) => {
-      st.val.stats.total_load_time += end - start
-      st.val.stats.load_success_count += 1
-      cache.set(key, v)
-      Some(v)
-    }
-    None => {
-      st.val.stats.load_failure_count += 1
-      None
-    }
-  }
-}
-
-///|
-/// Returns the value for `key`. On a miss, computes it with `loader(key)`,
-/// stores the result and returns it. The loader is never run when the value is
-/// already present, which is the common dedupe: repeated reads of a hot key
-/// compute nothing after the first miss.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::get_with(
-  self : Cache[K, V, P],
-  key : K,
-  loader : (K) -> V,
-) -> V {
+  loader : (K) -> V raise E,
+) -> V raise E {
   match self.get(key) {
     Some(v) => v
-    None => load_value(self, key, loader)
+    None => {
+      let st = self.state
+      let start = (st.val.clock)()
+      errdefer {
+        st.val.stats.load_failure_count += 1
+      }
+      let value = loader(key)
+      let end = (st.val.clock)()
+      st.val.stats.total_load_time += end - start
+      st.val.stats.load_success_count += 1
+      self.set(key, value)
+      value
+    }
   }
 }
 
 ///|
 /// Like `get_with`, but `loader` may return `None` to signal "no value"; such a
-/// result is not cached and `None` is returned.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::try_get_with(
-  self : Cache[K, V, P],
+/// result is not cached and `None` is returned. A raised error propagates to the
+/// caller and is counted as a load failure.
+pub fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(
+  self : Cache[K, V],
   key : K,
-  loader : (K) -> V?,
-) -> V? {
+  loader : (K) -> V? raise E,
+) -> V? raise E {
   match self.get(key) {
     Some(v) => Some(v)
-    None => load_opt(self, key, loader)
+    None => {
+      let st = self.state
+      let start = (st.val.clock)()
+      errdefer {
+        st.val.stats.load_failure_count += 1
+      }
+      match loader(key) {
+        Some(value) => {
+          let end = (st.val.clock)()
+          st.val.stats.total_load_time += end - start
+          st.val.stats.load_success_count += 1
+          self.set(key, value)
+          Some(value)
+        }
+        None => {
+          st.val.stats.load_failure_count += 1
+          None
+        }
+      }
+    }
   }
 }

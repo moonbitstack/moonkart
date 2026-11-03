@@ -2,27 +2,25 @@
 package "moonbitstack/moonkart"
 
 import {
-  "moonbitlang/core/hashmap",
-  "moonbitlang/core/ref",
   "moonbitstack/moonkart/policy",
 }
 
 // Values
 pub fn[K, V] default_config() -> Config[K, V]
 
-pub fn greet(StringView) -> String
+pub fn[K, V] infallible_loader((K) -> V) -> (K) -> V raise
 
-pub fn[K : Eq + Hash, V] lru_cache(cap? : Int64, max_weight? : Int64, weigher? : (K, V) -> Int64, clock? : () -> Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -> Unit) -> Cache[K, V, @policy.Lru]
+pub fn[K : Eq + Hash, V] lru_cache(cap? : Int64, max_weight? : Int64, weigher? : (K, V) -> Int64, clock? : () -> Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -> Unit) -> Cache[K, V]
 
-pub fn[K : Eq + Hash, V, P] new(P, max_weight? : Int64, weigher? : (K, V) -> Int64, clock? : () -> Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -> Unit) -> Cache[K, V, P]
+pub fn[K : Eq + Hash, V] new(&@policy.Policy, weigher? : (K, V) -> Int64, clock? : () -> Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -> Unit) -> Cache[K, V]
 
-pub fn[K : Eq + Hash, V, P] new_with_config(P, Config[K, V]) -> Cache[K, V, P]
+pub fn[K : Eq + Hash, V] new_with_config(&@policy.Policy, Config[K, V]) -> Cache[K, V]
 
-pub fn[K : Eq + Hash, V] s3fifo_cache(cap? : Int64, max_weight? : Int64, weigher? : (K, V) -> Int64, clock? : () -> Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -> Unit) -> Cache[K, V, @policy.S3Fifo]
+pub fn[K : Eq + Hash, V] s3fifo_cache(cap? : Int64, max_weight? : Int64, weigher? : (K, V) -> Int64, clock? : () -> Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -> Unit) -> Cache[K, V]
 
 pub fn system_clock() -> Int64
 
-pub fn[K : Eq + Hash, V] tinylfu_cache(cap? : Int64, max_weight? : Int64, window_ratio? : Double, protected_ratio? : Double, weigher? : (K, V) -> Int64, clock? : () -> Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -> Unit) -> Cache[K, V, @policy.Tinylfu]
+pub fn[K : Eq + Hash, V] tinylfu_cache(cap? : Int64, max_weight? : Int64, window_ratio? : Double, protected_ratio? : Double, weigher? : (K, V) -> Int64, clock? : () -> Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -> Unit) -> Cache[K, V]
 
 pub fn[K, V] tti(Int64) -> Expiry[K, V]
 
@@ -31,26 +29,26 @@ pub fn[K, V] ttl(Int64) -> Expiry[K, V]
 // Errors
 
 // Types and methods
-pub struct Cache[K, V, P] {
-  state : @ref.Ref[State[K, V, P]]
+pub struct Cache[K, V] {
+  // private fields
 }
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::contains(Self[K, V, P], K) -> Bool
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::entry(Self[K, V, P], K) -> Entry[K, V]
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::entry_or_null(Self[K, V, P], K) -> Entry[K, V]?
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::get(Self[K, V, P], K) -> V?
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::get_with(Self[K, V, P], K, (K) -> V) -> V
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::invalidate(Self[K, V, P], K) -> Bool
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::invalidate_all(Self[K, V, P]) -> Unit
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::invalidate_if(Self[K, V, P], (K, V) -> Bool) -> Int64
-pub fn[K, V, P : @policy.Policy] Cache::policy_size(Self[K, V, P]) -> Int32
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::remove(Self[K, V, P], K) -> Bool
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::set(Self[K, V, P], K, V) -> Unit
-pub fn[K, V, P] Cache::size(Self[K, V, P]) -> Int64
-pub fn[K, V, P] Cache::stats(Self[K, V, P]) -> CacheStats
-pub fn[K, V, P] Cache::to_array(Self[K, V, P]) -> Array[(K, V)]
-pub fn[K : Eq + Hash, V, P : @policy.Policy] Cache::try_get_with(Self[K, V, P], K, (K) -> V?) -> V?
+pub fn[K : Eq + Hash, V] Cache::contains(Self[K, V], K) -> Bool
+pub fn[K : Eq + Hash, V] Cache::entry(Self[K, V], K) -> Entry[K, V]
+pub fn[K : Eq + Hash, V] Cache::entry_or_null(Self[K, V], K) -> Entry[K, V]?
+pub fn[K : Eq + Hash, V] Cache::get(Self[K, V], K) -> V?
+pub fn[K : Eq + Hash, V, E : Error] Cache::get_with(Self[K, V], K, (K) -> V raise E) -> V raise E
+pub fn[K : Eq + Hash, V] Cache::invalidate(Self[K, V], K) -> Bool
+pub fn[K : Eq + Hash, V] Cache::invalidate_all(Self[K, V]) -> Unit
+pub fn[K : Eq + Hash, V] Cache::invalidate_if(Self[K, V], (K, V) -> Bool) -> Int64
+pub fn[K, V] Cache::policy_size(Self[K, V]) -> Int32
+pub fn[K : Eq + Hash, V] Cache::remove(Self[K, V], K) -> Bool
+pub fn[K : Eq + Hash, V] Cache::set(Self[K, V], K, V) -> Unit
+pub fn[K, V] Cache::size(Self[K, V]) -> Int64
+pub fn[K, V] Cache::stats(Self[K, V]) -> CacheStats
+pub fn[K, V] Cache::to_array(Self[K, V]) -> Array[(K, V)]
+pub fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(Self[K, V], K, (K) -> V? raise E) -> V? raise E
 
-pub struct CacheStats {
+pub(all) struct CacheStats {
   mut hit_count : Int64
   mut miss_count : Int64
   mut eviction_count : Int64
@@ -59,16 +57,17 @@ pub struct CacheStats {
   mut load_failure_count : Int64
   mut total_load_time : Int64
 }
+pub fn CacheStats::hit_rate(Self) -> Double
+pub fn CacheStats::miss_rate(Self) -> Double
 
 pub struct Config[K, V] {
-  max_weight : Int64?
   weigher : ((K, V) -> Int64)?
   clock : () -> Int64
   expiry : Expiry[K, V]?
   removal_listener : ((K, V, EvictionReason) -> Unit)?
 }
 
-pub struct Entry[K, V] {
+pub(all) struct Entry[K, V] {
   key : K
   value : V
   weight : Int64
@@ -86,26 +85,6 @@ pub struct Expiry[K, V] {
   after_create : (K, V, Int64) -> Int64?
   after_read : (K, V, Int64, Int64?) -> Int64?
   after_update : (K, V, Int64, Int64?) -> Int64?
-}
-
-pub struct Slot[V] {
-  id : Int64
-  value : V
-  weight : Int64
-  expire_at : Int64?
-}
-
-pub struct State[K, V, P] {
-  policy : P
-  max_weight : Int64
-  weigher : ((K, V) -> Int64)?
-  clock : () -> Int64
-  expiry : Expiry[K, V]?
-  removal_listener : ((K, V, EvictionReason) -> Unit)?
-  entries : @hashmap.HashMap[K, Slot[V]]
-  id_to_key : @hashmap.HashMap[Int64, K]
-  mut next_id : Int64
-  stats : CacheStats
 }
 
 // Type aliases

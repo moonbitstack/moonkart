@@ -8,9 +8,9 @@
 pub type Clock = () -> Int64
 
 ///|
-/// Weighs a value so the cache can bound total weight instead of entry count.
+/// Weighs an entry so the cache can bound total weight instead of entry count.
 /// Return a positive number; the cache treats the result as the entry's weight
-/// and evicts by weight when a maximum weight is set.
+/// and evicts by weight when the policy's maximum weight is set.
 pub type Weigher[K, V] = (K, V) -> Int64
 
 ///|
@@ -38,7 +38,7 @@ pub(all) enum EvictionReason {
 /// they can extend or keep it.
 ///
 /// A pure time-to-live from creation uses `ttl`; a time-to-idle (idle) lifetime
-/// uses `tti`; anything else is expressed with `expire_after_create` and friends.
+/// uses `tti`; anything else is expressed with the three callbacks directly.
 pub struct Expiry[K, V] {
   after_create : (K, V, Int64) -> Int64?
   after_read : (K, V, Int64, Int64?) -> Int64?
@@ -72,8 +72,9 @@ pub fn[K, V] tti(duration : Int64) -> Expiry[K, V] {
 }
 
 ///|
-/// Counters the cache keeps while it runs.
-pub struct CacheStats {
+/// Counters the cache keeps while it runs. The raw counts are exposed so callers
+/// can aggregate them; `hit_rate` and `miss_rate` are derived.
+pub(all) struct CacheStats {
   mut hit_count : Int64
   mut miss_count : Int64
   mut eviction_count : Int64
@@ -84,9 +85,32 @@ pub struct CacheStats {
 }
 
 ///|
+/// Fraction of reads that hit, in `0.0 ..= 1.0`. Zero reads reports `0.0` rather
+/// than dividing by zero.
+pub fn CacheStats::hit_rate(self : CacheStats) -> Double {
+  let total = self.hit_count + self.miss_count
+  if total == 0L {
+    0.0
+  } else {
+    self.hit_count.to_double() / total.to_double()
+  }
+}
+
+///|
+/// Fraction of reads that missed, in `0.0 ..= 1.0`.
+pub fn CacheStats::miss_rate(self : CacheStats) -> Double {
+  let total = self.hit_count + self.miss_count
+  if total == 0L {
+    0.0
+  } else {
+    self.miss_count.to_double() / total.to_double()
+  }
+}
+
+///|
 /// An entry as seen by a reader: its value, weight and absolute expiry
 /// deadline (if any).
-pub struct Entry[K, V] {
+pub(all) struct Entry[K, V] {
   key : K
   value : V
   weight : Int64

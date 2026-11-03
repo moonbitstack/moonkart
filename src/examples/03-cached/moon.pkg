@@ -2,7 +2,6 @@
 // project wires it as a dev_build rule.
 import {
   "moonbitstack/moonkart",
-  "moonbitstack/moonkart/policy",
 }
 
 pkgtype(kind: "executable")

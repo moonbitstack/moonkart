@@ -1,6 +1,11 @@
-// The asynchronous cache: the same cache, with awaits and coalesced loads.
+// The asynchronous cache: the same cache, with awaits and per-key coalesced loads.
 import {
   "moonbitstack/moonkart",
-  "moonbitstack/moonkart/policy",
   "moonbitlang/core/async",
+  "moonbitlang/core/hashmap",
+  "moonbitlang/core/ref",
 }
+
+options(
+  "allow-experimental-packages": [ "moonbitlang/core/async" ],
+)

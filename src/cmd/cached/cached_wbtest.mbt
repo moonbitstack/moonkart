@@ -33,7 +33,7 @@ test "a function keeps 128 results under the default policy when nothing says" {
   assert_true(code.contains(flat("pub fn f_cached(n : Int) -> Int")))
   assert_true(code.contains(flat("pub fn f_cached_clear() -> Unit")))
   assert_true(code.contains(flat("@moonkart.tinylfu_cache(cap=128L)")))
-  assert_true(code.contains(flat("@moonkart.Cache[Int, Int, @policy.Tinylfu]")))
+  assert_true(code.contains(flat("@moonkart.Cache[Int, Int]")))
 }
 
 ///|
@@ -42,7 +42,7 @@ test "several parameters are a tuple key, and none is a unit key" {
     "#kart.cached\nfn f(a : Int, b : String) -> Int {\n  a\n}",
   )
   assert_true(code.contains(flat("@moonkart.Cache[(Int, String), Int")))
-  assert_true(code.contains(flat("let (a, b) = key")))
+  assert_true(code.contains(flat("let v = f(a, b)")))
   let code = generate("#kart.cached\nfn f() -> Int {\n  1\n}")
   assert_true(code.contains(flat("@moonkart.Cache[Unit, Int")))
 }
@@ -63,7 +63,11 @@ test "the capacity, policy, name and expiry are the annotation's" {
     "#kart.cached(policy=\"s3fifo\", tti=\"250ms\")\nfn f(a : Int) -> Int {\n  a\n}",
   )
   assert_true(code.contains(flat("expiry=@moonkart.tti(250000000L)")))
-  assert_true(code.contains(flat("@policy.S3Fifo")))
+  assert_true(
+    code.contains(
+      flat("@moonkart.s3fifo_cache(cap=128L, expiry=@moonkart.tti(250000000L))"),
+    ),
+  )
 }
 
 ///|

@@ -6,15 +6,19 @@
 ///
 ///     moon run src/examples/02-loading
 #coverage.skip
-fn main {
+fn main raise {
   let loads : @ref.Ref[Int32] = @ref.Ref(0)
   let cache = @moonkart.lru_cache(cap=8L)
   let loader = fn(key : String) {
     loads.val = loads.val + 1
     key.length()
   }
-  println("first: \{cache.get_with("hello", loader)}")
-  println("second: \{cache.get_with("hello", loader)}")
+  println(
+    "first: \{cache.get_with("hello", @moonkart.infallible_loader(loader))}",
+  )
+  println(
+    "second: \{cache.get_with("hello", @moonkart.infallible_loader(loader))}",
+  )
   println("loader ran \{loads.val} time(s)")
   let stats = cache.stats()
   println(

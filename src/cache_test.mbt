@@ -186,9 +186,9 @@ test "get_with loads on a miss and caches the result" {
     k * 10
   }
   let c = @moonkart.lru_cache(cap=4L)
-  assert_eq(c.get_with(3, loader), 30)
+  assert_eq(c.get_with(3, @moonkart.infallible_loader(loader)), 30)
   assert_eq(calls.val, 1)
-  assert_eq(c.get_with(3, loader), 30)
+  assert_eq(c.get_with(3, @moonkart.infallible_loader(loader)), 30)
   assert_eq(calls.val, 1)
   assert_eq(c.stats().load_success_count, 1L)
 }
@@ -197,7 +197,7 @@ test "get_with loads on a miss and caches the result" {
 test "try_get_with does not cache a miss" {
   let loader = fn(_k : Int32) -> Int32? { None }
   let c = @moonkart.lru_cache(cap=4L)
-  assert_eq(c.try_get_with(1, loader), None)
+  assert_eq(c.try_get_with(1, @moonkart.infallible_loader(loader)), None)
   assert_eq(c.contains(1), false)
   assert_eq(c.stats().load_failure_count, 1L)
 }
@@ -326,4 +326,52 @@ test "policy_size tracks the stored entries" {
   c.set(3, "c")
   assert_eq(c.policy_size(), 3)
   assert_eq(c.policy_size(), c.size().to_int())
+}
+
+///|
+suberror LoadFailed
+
+///|
+test "a raised load is not cached and is counted as a failure" {
+  let c = @moonkart.lru_cache(cap=4L)
+  let loader = fn(_k : Int32) -> Int32 raise { raise LoadFailed }
+  let got = Some(c.get_with(1, loader)) catch { _ => None }
+  assert_eq(got, None)
+  assert_eq(c.contains(1), false)
+  assert_eq(c.stats().load_failure_count, 1L)
+}
+
+///|
+test "size and policy size agree and fill the capacity" {
+  let c = @moonkart.tinylfu_cache(cap=64L)
+  for i = 0; i < 5000; i = i + 1 {
+    c.set(i % 1000, i)
+    if i % 500 == 0 {
+      assert_eq(c.size(), Int64::from_int(c.policy_size()))
+      assert_true(c.size() <= 64L)
+    }
+  }
+  assert_eq(c.size(), 64L)
+  assert_eq(Int64::from_int(c.policy_size()), 64L)
+}
+
+///|
+test "an expired entry is removed once" {
+  let now : @ref.Ref[Int64] = @ref.Ref(0L)
+  let clock = fn() { now.val }
+  let removed : @ref.Ref[Int32] = @ref.Ref(0)
+  let record = fn(_k : Int32, _v : String, _r : @moonkart.EvictionReason) {
+    removed.val = removed.val + 1
+  }
+  let c = @moonkart.lru_cache(
+    cap=4L,
+    expiry=@moonkart.ttl(10L),
+    clock~,
+    removal_listener=record,
+  )
+  c.set(1, "a")
+  now.val = 20L
+  assert_eq(c.contains(1), false)
+  assert_eq(c.remove(1), false)
+  assert_eq(removed.val, 1)
 }

@@ -3,16 +3,21 @@
 
 ///|
 /// A pluggable eviction policy. The cache assigns every entry an opaque numeric
-/// id and talks to the policy only through ids and weights, so a policy never
-/// sees a key or value. Implement this trait of your own type and hand the
-/// instance to the cache to use a strategy the library does not ship.
+/// id and hands the policy the entry's key hash alongside it. Policies that
+/// track frequency use the hash, so a key keeps its history across eviction and
+/// re-admission even though every insertion gets a fresh id. A policy never sees
+/// a key or a value. Implement this trait of your own type and hand the instance
+/// to the cache to use a strategy the library does not ship.
 pub(open) trait Policy {
-  /// Record a read or write of an entry that is already present.
-  fn hit(self : Self, id : Int64) -> Unit
-  /// Record admission of a new entry of the given weight and return the ids the
-  /// cache must evict. The list may contain `id` itself, which means the entry
-  /// was refused and the cache should drop it.
-  fn admit(self : Self, id : Int64, weight : Int64) -> Array[Int64]
+  /// Record a read of an entry that is already present. `hash` is the hash of
+  /// the entry's key.
+  fn hit(self : Self, id : Int64, hash : Int32) -> Unit
+  /// Record admission of a new entry of the given weight and key hash, and
+  /// return the ids the cache must evict. The list may contain `id` itself,
+  /// which means the entry was refused and the cache should drop it.
+  fn admit(self : Self, id : Int64, weight : Int64, hash : Int32) -> Array[
+    Int64,
+  ]
   /// Forget an entry removed for a reason other than capacity.
   fn forget(self : Self, id : Int64) -> Unit
   /// Number of entries the policy currently tracks.
@@ -20,11 +25,22 @@ pub(open) trait Policy {
 }
 
 ///|
+/// Fraction of capacity given to the admission window in W-TinyLFU. The window
+/// admits new entries before they must earn a place in the main region, so a
+/// burst of one-hit wonders does not evict the working set.
+pub let tinylfu_window_ratio : Double = 0.1
+
+///|
+/// Fraction of the main region given to the protected segment in W-TinyLFU.
+/// Entries read at least once are promoted here, away from the probation queue.
+pub let tinylfu_protected_ratio : Double = 0.8
+
+///|
 /// A node of the intrusive doubly linked list used by the LRU-family policies.
 pub struct Link {
-  prev : Int64
-  next : Int64
-  weight : Int64
+  priv prev : Int64
+  priv next : Int64
+  priv weight : Int64
 }
 
 ///|
@@ -33,10 +49,10 @@ pub struct Link {
 /// `Ref` so that copying the list (for example passing it to a method that
 /// takes `self` by value) still mutates the one shared list.
 pub struct IntrusiveList {
-  head : Ref[Int64]
-  tail : Ref[Int64]
-  links : @hashmap.HashMap[Int64, Link]
-  weight_sum : Ref[Int64]
+  priv head : Ref[Int64]
+  priv tail : Ref[Int64]
+  priv links : @hashmap.HashMap[Int64, Link]
+  priv weight_sum : Ref[Int64]
 }
 
 ///|
@@ -78,15 +94,17 @@ fn IntrusiveList::push_back(
   id : Int64,
   weight : Int64,
 ) -> Unit {
-  self.links.set(id, { prev: self.tail.val, next: 0, weight, })
+  ignore(self.links.set(id, { prev: self.tail.val, next: 0, weight, }))
   if self.tail.val != 0 {
     match self.links.get(self.tail.val) {
       Some(t) =>
-        self.links.set(self.tail.val, {
-          prev: t.prev,
-          next: id,
-          weight: t.weight,
-        })
+        ignore(
+          self.links.set(self.tail.val, {
+            prev: t.prev,
+            next: id,
+            weight: t.weight,
+          }),
+        )
       None => ()
     }
   } else {
@@ -108,31 +126,32 @@ fn IntrusiveList::peek_front(self : IntrusiveList) -> Int64? {
 ///|
 fn IntrusiveList::pop_front(self : IntrusiveList) -> Int64? {
   if self.head.val == 0 {
-    None
-  } else {
-    let h = self.head.val
-    match self.links.get(h) {
-      Some(node) => {
-        self.head.val = node.next
-        if node.next != 0 {
-          match self.links.get(node.next) {
-            Some(n) =>
+    return None
+  }
+  let h = self.head.val
+  match self.links.get(h) {
+    Some(node) => {
+      self.head.val = node.next
+      if node.next != 0 {
+        match self.links.get(node.next) {
+          Some(n) =>
+            ignore(
               self.links.set(node.next, {
                 prev: 0,
                 next: n.next,
                 weight: n.weight,
-              })
-            None => ()
-          }
-        } else {
-          self.tail.val = 0
+              }),
+            )
+          None => ()
         }
-        self.weight_sum.val -= node.weight
-        self.links.remove(h)
-        Some(h)
+      } else {
+        self.tail.val = 0
       }
-      None => None
+      self.weight_sum.val -= node.weight
+      ignore(self.links.remove(h))
+      Some(h)
     }
+    None => None
   }
 }
 
@@ -144,11 +163,13 @@ fn IntrusiveList::remove(self : IntrusiveList, id : Int64) -> Unit {
       if node.prev != 0 {
         match self.links.get(node.prev) {
           Some(p) =>
-            self.links.set(node.prev, {
-              prev: p.prev,
-              next: node.next,
-              weight: p.weight,
-            })
+            ignore(
+              self.links.set(node.prev, {
+                prev: p.prev,
+                next: node.next,
+                weight: p.weight,
+              }),
+            )
           None => ()
         }
       } else {
@@ -157,18 +178,20 @@ fn IntrusiveList::remove(self : IntrusiveList, id : Int64) -> Unit {
       if node.next != 0 {
         match self.links.get(node.next) {
           Some(n) =>
-            self.links.set(node.next, {
-              prev: node.prev,
-              next: n.next,
-              weight: n.weight,
-            })
+            ignore(
+              self.links.set(node.next, {
+                prev: node.prev,
+                next: n.next,
+                weight: n.weight,
+              }),
+            )
           None => ()
         }
       } else {
         self.tail.val = node.prev
       }
       self.weight_sum.val -= node.weight
-      self.links.remove(id)
+      ignore(self.links.remove(id))
     }
   }
 }
@@ -189,9 +212,9 @@ fn IntrusiveList::move_to_back(self : IntrusiveList, id : Int64) -> Unit {
 /// Least-recently-used policy: the entry not touched for the longest time
 /// leaves first.
 pub struct Lru {
-  max_weight : Int64
-  weight : Ref[Int64]
-  order : IntrusiveList
+  priv max_weight : Int64
+  priv weight : Ref[Int64]
+  priv order : IntrusiveList
 }
 
 ///|
@@ -206,14 +229,17 @@ pub fn new_lru(cap? : Int64, max_weight? : Int64) -> Lru {
 }
 
 ///|
-pub impl Policy for Lru with fn hit(self : Lru, id : Int64) -> Unit {
+pub impl Policy for Lru with fn hit(self : Lru, id : Int64, _hash : Int32) -> Unit {
   self.order.move_to_back(id)
 }
 
 ///|
-pub impl Policy for Lru with fn admit(self : Lru, id : Int64, weight : Int64) -> Array[
-  Int64,
-] {
+pub impl Policy for Lru with fn admit(
+  self : Lru,
+  id : Int64,
+  weight : Int64,
+  _hash : Int32,
+) -> Array[Int64] {
   self.order.push_back(id, weight)
   self.weight.val += weight
   let evicted : Array[Int64] = []
@@ -255,11 +281,11 @@ pub extend Lru with Policy::{admit, hit, forget, size}
 /// wonders are evicted on first sight, while repeated keys survive several
 /// rounds, at the cost of one boolean per entry.
 pub struct S3Fifo {
-  max_weight : Int64
-  weight : Ref[Int64]
-  q_order : IntrusiveList
-  q_weight : @hashmap.HashMap[Int64, Int64]
-  q_visited : @hashmap.HashMap[Int64, Bool]
+  priv max_weight : Int64
+  priv weight : Ref[Int64]
+  priv q_order : IntrusiveList
+  priv q_weight : @hashmap.HashMap[Int64, Int64]
+  priv q_visited : @hashmap.HashMap[Int64, Bool]
 }
 
 ///|
@@ -277,9 +303,9 @@ pub fn new_s3fifo(cap? : Int64, max_weight? : Int64) -> S3Fifo {
 }
 
 ///|
-pub impl Policy for S3Fifo with fn hit(self : S3Fifo, id : Int64) -> Unit {
+pub impl Policy for S3Fifo with fn hit(self : S3Fifo, id : Int64, _hash : Int32) -> Unit {
   if self.q_weight.contains(id) {
-    self.q_visited.set(id, true)
+    ignore(self.q_visited.set(id, true))
   }
 }
 
@@ -288,15 +314,16 @@ pub impl Policy for S3Fifo with fn admit(
   self : S3Fifo,
   id : Int64,
   weight : Int64,
+  _hash : Int32,
 ) -> Array[Int64] {
   if self.q_weight.contains(id) {
     let old = self.q_weight.get(id).unwrap_or(0)
     self.weight.val += weight - old
-    self.q_weight.set(id, weight)
+    ignore(self.q_weight.set(id, weight))
   } else {
     self.q_order.push_back(id, weight)
-    self.q_weight.set(id, weight)
-    self.q_visited.set(id, false)
+    ignore(self.q_weight.set(id, weight))
+    ignore(self.q_visited.set(id, false))
     self.weight.val += weight
   }
   let evicted : Array[Int64] = []
@@ -307,18 +334,15 @@ pub impl Policy for S3Fifo with fn admit(
     match self.q_order.peek_front() {
       Some(vid) => {
         let vw = self.q_weight.get(vid).unwrap_or(0)
-        let visited = match self.q_visited.get(vid) {
-          Some(b) => b
-          None => false
-        }
+        let visited = self.q_visited.get(vid).unwrap_or(false)
         ignore(self.q_order.pop_front())
         ignore(self.q_weight.remove(vid))
         ignore(self.q_visited.remove(vid))
         self.weight.val -= vw
         if visited {
           self.q_order.push_back(vid, vw)
-          self.q_weight.set(vid, vw)
-          self.q_visited.set(vid, false)
+          ignore(self.q_weight.set(vid, vw))
+          ignore(self.q_visited.set(vid, false))
           self.weight.val += vw
         } else {
           evicted.push(vid)
@@ -350,13 +374,13 @@ pub impl Policy for S3Fifo with fn size(self : S3Fifo) -> Int32 {
 pub extend S3Fifo with Policy::{admit, hit, forget, size}
 
 ///|
-/// A Count-Min frequency sketch with periodic aging. A small doorkeeper keeps
-/// one-hit wonders from polluting the counters.
+/// A Count-Min frequency sketch with periodic aging. The doorkeeper in
+/// `Tinylfu` keeps one-hit wonders from polluting the counters.
 pub struct Sketch {
-  rows : Array[Array[Int32]]
-  mask : Int32
-  count : Ref[Int32]
-  sample_size : Int32
+  priv rows : Array[Array[Int32]]
+  priv mask : Int32
+  priv count : Ref[Int32]
+  priv sample_size : Int32
 }
 
 ///|
@@ -366,7 +390,7 @@ let sketch_seeds : Array[Int32] = [
 
 ///|
 fn new_sketch(capacity : Int32) -> Sketch {
-  let width = max2(16, (capacity * 2).next_power_of_two())
+  let width = max2(16, (capacity * 4).next_power_of_two())
   let rows = [
     Array::make(width, 0),
     Array::make(width, 0),
@@ -382,8 +406,8 @@ fn new_sketch(capacity : Int32) -> Sketch {
 }
 
 ///|
-fn Sketch::sketch_increment(self : Sketch, id : Int64) -> Unit {
-  let x = id.to_int()
+fn Sketch::sketch_increment(self : Sketch, hash : Int32) -> Unit {
+  let x = hash
   for i = 0; i < 4; i = i + 1 {
     let idx = (x * sketch_seeds[i]) & self.mask
     self.rows[i][idx] = min2(self.rows[i][idx] + 1, 15)
@@ -392,8 +416,8 @@ fn Sketch::sketch_increment(self : Sketch, id : Int64) -> Unit {
 }
 
 ///|
-fn Sketch::sketch_estimate(self : Sketch, id : Int64) -> Int32 {
-  let x = id.to_int()
+fn Sketch::sketch_estimate(self : Sketch, hash : Int32) -> Int32 {
+  let x = hash
   let mut est = 15
   for i = 0; i < 4; i = i + 1 {
     let idx = (x * sketch_seeds[i]) & self.mask
@@ -415,31 +439,28 @@ fn Sketch::sketch_age(self : Sketch) -> Unit {
 
 ///|
 /// W-TinyLFU policy: a small admission window feeds a segmented LRU (probation
-/// and protected) that is guarded by the frequency sketch, so frequently used
-/// entries survive even after they age out of recency. The default for the
-/// cache.
+/// and protected) that is guarded by a frequency sketch keyed by the entry's
+/// key hash, so often-read keys survive even after they age out of recency.
+/// This is the cache's default strategy.
 pub struct Tinylfu {
-  max_weight : Int64
-  window_max : Int64
-  probation_max : Int64
-  protected_max : Int64
-  weight : Ref[Int64]
-  window : IntrusiveList
-  probation : IntrusiveList
-  protected_list : IntrusiveList
-  sketch : Sketch
-  doorkeeper : @hashmap.HashMap[Int64, Unit]
+  priv max_weight : Int64
+  priv window_max : Int64
+  priv protected_max : Int64
+  priv window : IntrusiveList
+  priv probation : IntrusiveList
+  priv protected_list : IntrusiveList
+  priv sketch : Sketch
+  priv id_hash : @hashmap.HashMap[Int64, Int32]
 }
 
 ///|
-/// Creates a W-TinyLFU policy. `window_ratio` (default `0.01`) sizes the
-/// admission window; `protected_ratio` (default `0.8`) sizes the protected
-/// segment of the main LRU.
+/// Creates a W-TinyLFU policy. `window_ratio` sizes the admission window;
+/// `protected_ratio` sizes the protected segment of the main region.
 pub fn new_tinylfu(
   cap? : Int64,
   max_weight? : Int64,
-  window_ratio~ : Double = 0.01,
-  protected_ratio~ : Double = 0.8,
+  window_ratio~ : Double = tinylfu_window_ratio,
+  protected_ratio~ : Double = tinylfu_protected_ratio,
 ) -> Tinylfu {
   let max = max_weight.unwrap_or(cap.unwrap_or(0))
   let window_max = max_i64(
@@ -448,90 +469,98 @@ pub fn new_tinylfu(
   )
   let remain = max - window_max
   let protected_max = int64_of_double(int64_to_double(remain) * protected_ratio)
-  let probation_max = remain - protected_max
   {
     max_weight: max,
     window_max,
-    probation_max,
     protected_max,
-    weight: @ref.Ref(0),
     window: new_list(),
     probation: new_list(),
     protected_list: new_list(),
     sketch: new_sketch(max.to_int()),
-    doorkeeper: @hashmap.HashMap([]),
+    id_hash: @hashmap.HashMap([]),
   }
 }
 
 ///|
-fn Tinylfu::record_access(self : Tinylfu, id : Int64) -> Unit {
+fn Tinylfu::total_weight(self : Tinylfu) -> Int64 {
+  self.window.weight_sum.val +
+  self.probation.weight_sum.val +
+  self.protected_list.weight_sum.val
+}
+
+///|
+fn Tinylfu::record_access(self : Tinylfu, hash : Int32) -> Unit {
   if self.sketch.count.val >= self.sketch.sample_size {
     self.sketch.sketch_age()
-    self.doorkeeper.clear()
   }
-  if self.doorkeeper.contains(id) {
-    self.sketch.sketch_increment(id)
-  } else {
-    self.doorkeeper.set(id, ())
-  }
+  self.sketch.sketch_increment(hash)
 }
 
 ///|
-fn Tinylfu::evict(self : Tinylfu, candidate : Int64) -> Array[Int64] {
+fn Tinylfu::evict(self : Tinylfu) -> Array[Int64] {
   let evicted : Array[Int64] = []
-  while self.max_weight > 0 && self.weight.val > self.max_weight {
-    while self.window.weight_sum.val > self.window_max &&
-          !self.window.is_empty() {
-      match self.window.peek_front() {
-        Some(wid) => {
-          let w = self.window.weight_of(wid)
-          ignore(self.window.pop_front())
-          self.probation.push_back(wid, w)
-        }
-        None => break
-      }
+  while self.total_weight() > self.max_weight && !self.window.is_empty() {
+    let cand = match self.window.peek_front() {
+      Some(c) => c
+      None => break
     }
+    let cw = self.window.weight_of(cand)
+    let chash = self.id_hash.get(cand).unwrap_or(0)
+    ignore(self.window.pop_front())
+    let main_weight = self.probation.weight_sum.val +
+      self.protected_list.weight_sum.val
+    let main_cap = self.max_weight - self.window_max
     let victim_opt = if !self.probation.is_empty() {
       self.probation.peek_front()
-    } else if !self.window.is_empty() {
-      self.window.peek_front()
+    } else if !self.protected_list.is_empty() {
+      self.protected_list.peek_front()
     } else {
       None
     }
-    match victim_opt {
-      None => break
-      Some(v) => {
-        let in_window = self.window.contains(v)
-        let vw = if in_window {
-          self.window.weight_of(v)
-        } else {
-          self.probation.weight_of(v)
-        }
-        if self.sketch.sketch_estimate(v) >=
-          self.sketch.sketch_estimate(candidate) {
-          let cw = self.window.weight_of(candidate)
-          ignore(self.window.remove(candidate))
-          self.weight.val -= cw
-          evicted.push(candidate)
-          return evicted
-        } else {
-          if in_window {
-            ignore(self.window.remove(v))
-          } else {
-            ignore(self.probation.remove(v))
-          }
-          self.weight.val -= vw
-          evicted.push(v)
+    let admit = if main_weight + cw <= main_cap {
+      true
+    } else {
+      match victim_opt {
+        None => true
+        Some(v) => {
+          let vhash = self.id_hash.get(v).unwrap_or(0)
+          self.sketch.sketch_estimate(chash) >
+          self.sketch.sketch_estimate(vhash)
         }
       }
+    }
+    if admit {
+      self.probation.push_back(cand, cw)
+      if main_weight + cw > main_cap {
+        match victim_opt {
+          Some(v) => {
+            let in_probation = self.probation.contains(v)
+            if in_probation {
+              ignore(self.probation.remove(v))
+            } else {
+              ignore(self.protected_list.remove(v))
+            }
+            ignore(self.id_hash.remove(v))
+            evicted.push(v)
+          }
+          None => ()
+        }
+      }
+    } else {
+      ignore(self.id_hash.remove(cand))
+      evicted.push(cand)
     }
   }
   evicted
 }
 
 ///|
-pub impl Policy for Tinylfu with fn hit(self : Tinylfu, id : Int64) -> Unit {
-  self.record_access(id)
+pub impl Policy for Tinylfu with fn hit(
+  self : Tinylfu,
+  id : Int64,
+  hash : Int32,
+) -> Unit {
+  self.record_access(hash)
   if self.window.contains(id) {
     self.window.move_to_back(id)
   } else if self.probation.contains(id) {
@@ -540,9 +569,10 @@ pub impl Policy for Tinylfu with fn hit(self : Tinylfu, id : Int64) -> Unit {
     if self.protected_list.weight_sum.val + w <= self.protected_max {
       self.protected_list.push_back(id, w)
     } else {
-      match self.protected_list.pop_front() {
+      match self.protected_list.peek_front() {
         Some(pf) => {
           let pw = self.protected_list.weight_of(pf)
+          ignore(self.protected_list.pop_front())
           self.probation.push_back(pf, pw)
         }
         None => ()
@@ -559,23 +589,22 @@ pub impl Policy for Tinylfu with fn admit(
   self : Tinylfu,
   id : Int64,
   weight : Int64,
+  hash : Int32,
 ) -> Array[Int64] {
-  self.record_access(id)
-  self.weight.val += weight
+  ignore(self.id_hash.set(id, hash))
+  self.record_access(hash)
   self.window.push_back(id, weight)
-  self.evict(id)
+  self.evict()
 }
 
 ///|
 pub impl Policy for Tinylfu with fn forget(self : Tinylfu, id : Int64) -> Unit {
+  ignore(self.id_hash.remove(id))
   if self.window.contains(id) {
-    self.weight.val -= self.window.weight_of(id)
     ignore(self.window.remove(id))
   } else if self.probation.contains(id) {
-    self.weight.val -= self.probation.weight_of(id)
     ignore(self.probation.remove(id))
   } else if self.protected_list.contains(id) {
-    self.weight.val -= self.protected_list.weight_of(id)
     ignore(self.protected_list.remove(id))
   }
 }

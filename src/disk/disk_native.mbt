@@ -22,8 +22,8 @@
 /// generic and imposes no wire format of its own. Restored entries are replayed
 /// through `set`, so the cache's current capacity and expiry policy apply to
 /// them.
-pub struct DiskCache[K, V, P] {
-  cache : @moonkart.Cache[K, V, P]
+pub struct DiskCache[K, V] {
+  cache : @moonkart.Cache[K, V]
   path : String
   encode_key : (K) -> Bytes
   decode_key : (Bytes) -> K?
@@ -35,15 +35,15 @@ pub struct DiskCache[K, V, P] {
 ///|
 /// Opens `path` and rebuilds `cache` from the log, then returns a disk-backed
 /// handle. A missing file is created empty.
-pub async fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::open(
-  cache : @moonkart.Cache[K, V, P],
+pub async fn[K : Eq + Hash, V] DiskCache::open(
+  cache : @moonkart.Cache[K, V],
   path : StringView,
   encode_key : (K) -> Bytes,
   decode_key : (Bytes) -> K?,
   encode_value : (V) -> Bytes,
   decode_value : (Bytes) -> V?,
-) -> DiskCache[K, V, P] {
-  let disk : DiskCache[K, V, P] = {
+) -> DiskCache[K, V] {
+  let disk : DiskCache[K, V] = {
     cache,
     path: path.to_owned(),
     encode_key,
@@ -62,31 +62,26 @@ pub async fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::open(
 
 ///|
 /// The path this cache persists to.
-pub fn[K, V, P] DiskCache::path(self : DiskCache[K, V, P]) -> String {
+pub fn[K, V] DiskCache::path(self : DiskCache[K, V]) -> String {
   self.path
 }
 
 ///|
 /// The in-memory cache underneath.
-pub fn[K, V, P] DiskCache::cache(
-  self : DiskCache[K, V, P],
-) -> @moonkart.Cache[K, V, P] {
+pub fn[K, V] DiskCache::cache(self : DiskCache[K, V]) -> @moonkart.Cache[K, V] {
   self.cache
 }
 
 ///|
 /// Reads `key` from memory.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::get(
-  self : DiskCache[K, V, P],
-  key : K,
-) -> V? {
+pub fn[K : Eq + Hash, V] DiskCache::get(self : DiskCache[K, V], key : K) -> V? {
   self.cache.get(key)
 }
 
 ///|
 /// Whether `key` is in memory.
-pub fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::contains(
-  self : DiskCache[K, V, P],
+pub fn[K : Eq + Hash, V] DiskCache::contains(
+  self : DiskCache[K, V],
   key : K,
 ) -> Bool {
   self.cache.contains(key)
@@ -94,14 +89,14 @@ pub fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::contains(
 
 ///|
 /// Number of entries in memory.
-pub fn[K, V, P] DiskCache::size(self : DiskCache[K, V, P]) -> Int64 {
+pub fn[K, V] DiskCache::size(self : DiskCache[K, V]) -> Int64 {
   self.cache.size()
 }
 
 ///|
 /// Writes `key` to memory and appends a `put` record to the file.
-pub async fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::set(
-  self : DiskCache[K, V, P],
+pub async fn[K : Eq + Hash, V] DiskCache::set(
+  self : DiskCache[K, V],
   key : K,
   value : V,
 ) -> Unit {
@@ -115,8 +110,8 @@ pub async fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::set(
 
 ///|
 /// Removes `key` from memory and, when it was present, appends a `del` record.
-pub async fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::remove(
-  self : DiskCache[K, V, P],
+pub async fn[K : Eq + Hash, V] DiskCache::remove(
+  self : DiskCache[K, V],
   key : K,
 ) -> Bool {
   let existed = self.cache.remove(key)
@@ -133,7 +128,7 @@ pub async fn[K : Eq + Hash, V, P : @policy.Policy] DiskCache::remove(
 ///|
 /// Rewrites the file from the live entries, dropping superseded and deleted
 /// records. Run this periodically so the log does not grow without bound.
-pub async fn[K, V, P] DiskCache::compact(self : DiskCache[K, V, P]) -> Unit {
+pub async fn[K, V] DiskCache::compact(self : DiskCache[K, V]) -> Unit {
   self.write_lock.acquire()
   defer self.write_lock.release()
   let buf = @buffer.Buffer()
@@ -187,9 +182,7 @@ fn read_i32_le(view : BytesView, off : Int32) -> Int32 {
 }
 
 ///|
-async fn[K : Eq + Hash, V, P : @policy.Policy] replay(
-  disk : DiskCache[K, V, P],
-) -> Unit {
+async fn[K : Eq + Hash, V] replay(disk : DiskCache[K, V]) -> Unit {
   let data = @fs.read_binary(disk.path)
   let view = data.exact_view()
   let total = view.length()

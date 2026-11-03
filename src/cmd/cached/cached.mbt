@@ -71,11 +71,11 @@ fn nanos(text : String, where_ : String) -> Int64 raise {
 
 ///|
 /// The constructor a `policy=` names, and the type of the cache it builds.
-fn policy_of(name : String, where_ : String) -> (String, String) raise {
+fn policy_of(name : String, where_ : String) -> String raise {
   match name {
-    "lru" => ("lru_cache", "Lru")
-    "s3fifo" => ("s3fifo_cache", "S3Fifo")
-    "tinylfu" => ("tinylfu_cache", "Tinylfu")
+    "lru" => "lru_cache"
+    "s3fifo" => "s3fifo_cache"
+    "tinylfu" => "tinylfu_cache"
     _ => fail("\{where_}: `policy` is lru, s3fifo or tinylfu, not `\{name}`")
   }
 }
@@ -123,10 +123,7 @@ fn wrapper(
     _ => ("(\{types.join(", ")})", "(\{names.join(", ")})")
   }
   let cached = args.str("name").unwrap_or(name + "_cached")
-  let (build, policy) = policy_of(
-    args.str("policy").unwrap_or("tinylfu"),
-    where_,
-  )
+  let build = policy_of(args.str("policy").unwrap_or("tinylfu"), where_)
   let size = args.str("capacity").unwrap_or(capacity)
   guard size is [_, ..] &&
     size.iter().all(c => c is ('0'..<='9')) &&
@@ -144,19 +141,12 @@ fn wrapper(
   let vis = if public { "pub " } else { "" }
   let holder = cached + "_store"
   let signature = names.mapi((i, p) => "\{p} : \{types[i]}").join(", ")
-  let unpack = if names.length() > 1 {
-    "let (\{names.join(", ")}) = key\n    "
-  } else if names.is_empty() {
-    "ignore(key)\n    "
-  } else {
-    "let \{names[0]} = key\n    "
-  }
   let inner = "@moonkart.\{build}(cap=\{size}L\{expiry})"
-  let cache_type = "@moonkart.Cache[\{key_type}, \{value}, @policy.\{policy}]"
+  let cache_type = "@moonkart.Cache[\{key_type}, \{value}]"
   let (store, store_type, run, clear) = if is_async {
     (
       "@concurrent.AsyncCache::new(\{inner})",
-      "@concurrent.AsyncCache[\{key_type}, \{value}, @policy.\{policy}]",
+      "@concurrent.AsyncCache[\{key_type}, \{value}]",
       "async ",
       "\{holder}.inner().invalidate_all()",
     )
@@ -167,9 +157,14 @@ fn wrapper(
     $|let \{holder} : \{store_type} = \{store}
     $|
     $|\{vis}\{run}fn \{cached}(\{signature}) -> \{value} {
-    $|  \{holder}.get_with(\{key}, key => {
-    $|    \{unpack}\{name}(\{names.join(", ")})
-    $|  })
+    $|  match \{holder}.get(\{key}) {
+    $|    Some(v) => v
+    $|    None => {
+    $|      let v = \{name}(\{names.join(", ")})
+    $|      \{holder}.set(\{key}, v)
+    $|      v
+    $|    }
+    $|  }
     $|}
     $|
     $|\{vis}fn \{cached}_clear() -> Unit {
