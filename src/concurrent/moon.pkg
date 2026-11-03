@@ -1,11 +1,7 @@
 // The asynchronous cache: the same cache, with awaits and per-key coalesced loads.
 import {
   "moonbitstack/moonkart",
-  "moonbitlang/core/async",
+  "moonbitlang/async",
   "moonbitlang/core/hashmap",
   "moonbitlang/core/ref",
 }
-
-options(
-  "allow-experimental-packages": [ "moonbitlang/core/async" ],
-)
