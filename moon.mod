@@ -8,7 +8,24 @@ repository = "https://github.com/moonbitstack/moonkart"
 
 license = "Apache-2.0"
 
-keywords = [ "cache", "lru", "tinylfu", "moonbit" ]
+keywords = [
+  "cache",
+  "caching",
+  "lru",
+  "tinylfu",
+  "w-tinylfu",
+  "s3fifo",
+  "ttl",
+  "tti",
+  "expiry",
+  "eviction",
+  "loader",
+  "concurrent",
+  "disk-cache",
+  "caffeine",
+  "moka",
+  "moonbit",
+]
 
 description = "A cache for MoonBit: bounded by count or weight, with expiry, loaders and eviction listeners."
 
