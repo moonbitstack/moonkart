@@ -4,21 +4,29 @@
 ///|
 /// Replays a prefix of the ARC OLTP trace through each shipped policy. The full
 /// trace is too large for the repository and too slow for every CI run, so the
-/// test pins a short prefix and only checks the ordering the policies are
-/// designed to produce: frequency-aware admission does not lose to pure recency
-/// on this trace.
+/// test pins a short prefix.
+///
+/// Two properties are checked. Every policy must finish with its cache full:
+/// a policy that leaks weight stops admitting early and under-fills, which is
+/// what a lost weight accounted for by hand does. And frequency-aware admission
+/// must beat pure recency by a margin larger than the run-to-run spread: the
+/// frequency sketch is keyed by the runtime's hash seed, so a seed change
+/// reshuffles collisions and moves the TinyLFU figure by about half a point.
 test "policies replay a truncated ARC trace" {
   let keys = @bench.truncated_oltp()
   let cap = 500L
-  let lru = @bench.hit_rate(keys, "lru", cap)
-  let s3fifo = @bench.hit_rate(keys, "s3fifo", cap)
-  let tinylfu = @bench.hit_rate(keys, "tinylfu", cap)
+  let (lru, lru_size, _) = @bench.replay_stats(keys, "lru", cap)
+  let (s3fifo, s3fifo_size, _) = @bench.replay_stats(keys, "s3fifo", cap)
+  let (tinylfu, tinylfu_size, _) = @bench.replay_stats(keys, "tinylfu", cap)
   println("lru=\{lru} s3fifo=\{s3fifo} tinylfu=\{tinylfu}")
   assert_true(lru >= 0.0 && lru <= 1.0)
   assert_true(s3fifo >= 0.0 && s3fifo <= 1.0)
   assert_true(tinylfu >= 0.0 && tinylfu <= 1.0)
-  assert_true(s3fifo >= lru - 0.01)
-  assert_true(tinylfu >= lru + 0.01)
+  assert_eq(lru_size, cap)
+  assert_eq(s3fifo_size, cap)
+  assert_eq(tinylfu_size, cap)
+  assert_true(s3fifo >= lru)
+  assert_true(tinylfu >= lru + 0.03)
 }
 
 ///|
