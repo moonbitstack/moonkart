@@ -45,6 +45,30 @@ type does not change when you switch strategies.
 `tinylfu_cache`, `lru_cache` and `s3fifo_cache` share the same knobs; use
 `new(policy, ...)` with your own policy if none of these fit.
 
+### Measured hit rates
+
+`src/bench` replays a trace of keys through each policy and reports the hit
+rate, so a change to a policy can be judged against real access patterns rather
+than intuition. Numbers below come from the three ARC traces (the request
+streams published with the ARC paper), replaying every request:
+
+| Trace | Capacity | `lru_cache` | `s3fifo_cache` | `tinylfu_cache` |
+|:--|--:|--:|--:|--:|
+| OLTP (914,145 requests) | 1,869 | 0.4164 | 0.4219 | 0.4219 |
+| DS1 (2,510,124 requests) | 101,764 | 0.1087 | 0.1109 | 0.2418 |
+| S3 (16,407,702 requests) | 524,288 | 0.2526 | n/a | 0.4640 |
+
+Two checks make these comparable with published results. First, `lru_cache` on
+S3 at 524,288 entries returns 0.25258, reproducing the 25.26% that the ARC paper
+reports for the same trace at the same capacity, which validates both the replay
+harness and the LRU implementation. Second, the ordering matches the published
+conclusions: frequency-aware admission wins by a wide margin on the scan-heavy
+S3 trace, holds a similar lead on DS1, and ties LRU on OLTP where recency
+dominates.
+
+Replay of the full traces is an offline measurement, not a test; CI replays only
+the first ten thousand requests of OLTP so it needs no downloaded data.
+
 ## Capacity
 
 Bound the cache by entry count with `cap`, or by total weight with
@@ -145,7 +169,8 @@ formatter(ignore: [ "slow.g.mbt" ])
 
 `@moonkart.concurrent.AsyncCache` wraps any cache so that loads can be awaited.
 Concurrent readers of one key share a single loader; readers of different keys
-never wait on each other, and no lock is held while a loader runs.
+never wait on each other, and no lock is held while a loader runs. It is built on
+`moonbitlang/async`, so it shares the runtime your other tasks already use.
 
 ```moonbit
 import {
@@ -244,13 +269,26 @@ let cache = @moonkart.new(@my_policy.Policy::new())
 | `system_clock` | the default clock, from the runtime |
 | `set(key, value)` | insert or replace |
 | `get(key)` | read, or `None` |
-| `contains(key)` | presence, ignoring nothing |
+| `contains(key)` | presence; no hit, no idle refresh |
 | `entry(key)`, `entry_or_null(key)` | snapshot of an entry |
 | `remove(key)`, `invalidate(key)` | remove one, returns whether it was present |
 | `invalidate_all()`, `invalidate_if(pred)` | remove many |
 | `get_with(key, loader)`, `try_get_with(key, loader)` | load on miss; the loader may raise |
 | `infallible_loader(loader)` | adapt a loader that cannot fail |
 | `stats()`, `size()`, `policy_size()` | counters and sizes |
+
+### Upgrading from the 0.1.0 pre-release
+
+The module has not been published; these are the changes to make when moving
+code written against the first source drop.
+
+| Before | After |
+|:--|:--|
+| `Cache[K, V, P]` | `Cache[K, V]`; the policy is chosen at construction and erased |
+| `cache[Int, String, @policy.Lru]()` | `@moonkart.lru_cache(cap=...)` |
+| `get_with(key, fn(k) { ... })` | `get_with(key, fn(k) raise { ... })` |
+| a loader that cannot fail | wrap it: `infallible_loader(fn(k) { ... })` |
+| `@policy.Policy::hit(id)` / `admit(id, w)` | `hit(id, hash)` / `admit(id, w, hash)` |
 
 ## Determinism
 
