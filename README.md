@@ -54,20 +54,24 @@ streams published with the ARC paper), replaying every request:
 
 | Trace | Capacity | `lru_cache` | `s3fifo_cache` | `tinylfu_cache` |
 |:--|--:|--:|--:|--:|
-| OLTP (914,145 requests) | 1,869 | 0.4164 | 0.4219 | 0.4219 |
-| DS1 (2,510,124 requests) | 101,764 | 0.1087 | 0.1109 | 0.2418 |
-| S3 (16,407,702 requests) | 524,288 | 0.2526 | n/a | 0.4640 |
+| OLTP (914,145 requests) | 1,869 | 0.4164 | 0.4219 | 0.4269 |
+| DS1 (2,505,947 requests) | 101,764 | 0.1087 | 0.1109 | 0.2411 |
+| S3 (16.4 million requests) | 524,288 | 0.2526 | n/a | 0.4640 |
 
 Two checks make these comparable with published results. First, `lru_cache` on
 S3 at 524,288 entries returns 0.25258, reproducing the 25.26% that the ARC paper
 reports for the same trace at the same capacity, which validates both the replay
 harness and the LRU implementation. Second, the ordering matches the published
 conclusions: frequency-aware admission wins by a wide margin on the scan-heavy
-S3 trace, holds a similar lead on DS1, and ties LRU on OLTP where recency
-dominates.
+S3 trace, holds a similar lead on DS1, and only edges ahead on OLTP, where
+recency dominates and frequency has little to add.
 
 Replay of the full traces is an offline measurement, not a test; CI replays only
-the first ten thousand requests of OLTP so it needs no downloaded data.
+the first forty thousand requests of OLTP so it needs no downloaded data.
+
+The frequency sketch is keyed by the runtime's hash seed, so a different seed
+reshuffles its collisions and moves a TinyLFU figure by a few tenths of a point;
+the recency policies are unaffected.
 
 ## Capacity
 
