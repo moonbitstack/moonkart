@@ -223,7 +223,7 @@ def render() -> str:
     <a href="./guide.html">Guide</a>
     <a href="./inside.html">Inside</a>
     <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
-    <a href="https://mooncakes.io/docs/moonbitstack/moonkart">mooncakes</a>
+    <a href="https://mooncakes.io/docs/moonbitstack/moonkart">MoonCakes</a>
   </nav>
   <div class="stamp" aria-hidden="true"><span><b>PACKED</b>IN MOONBIT</span></div>
 </footer>
