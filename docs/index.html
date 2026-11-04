@@ -216,12 +216,17 @@
                 fill="url(#fluteEdge)" fill-rule="evenodd" stroke="#6d4a29" stroke-width="1" stroke-linejoin="round"/>
 
           <g class="lidwrap">
+            <!-- `far` folds back over the rim and is gone behind it; it may never be
+                 written outside the mouth, so it always reads as slipping under -->
             <g data-flap="far" clip-path="url(#mouthClip)">
               <polygon points="110 176 260 96 348.2 143.1 198.2 223.1"
                        fill="url(#lidFar)" stroke="#6d4a29" stroke-width="1.6" stroke-linejoin="round"/>
               <polygon points="110 176 260 96 348.2 143.1 198.2 223.1" fill="url(#ribL)" opacity=".8"/>
+              <polygon class="tape" data-tape="far" points="359.7 143.5 199.1 229.2 192.9 225.9 353.5 140.2"
+                       fill="rgba(255,250,238,.32)"/>
             </g>
-            <g data-flap="near" clip-path="url(#mouthClip)">
+            <!-- `near` comes towards the eye and stays there, hanging over the wall -->
+            <g data-flap="near" clip-path="url(#hangClip)">
               <!-- its own cut edge, which shows while the flap is still coming over -->
               <path class="flap__edge" fill="url(#fluteEdge)" stroke="rgba(96,62,28,.5)" stroke-width=".6"/>
               <g class="flap__body">
@@ -229,18 +234,12 @@
                          fill="url(#lidNear)" stroke="#6d4a29" stroke-width="1.6" stroke-linejoin="round"/>
                 <polygon points="260 256 410 176 348.2 143.1 198.2 223.1" fill="url(#ribR)" opacity=".7"/>
               </g>
+              <polygon class="tape" data-tape="near" points="353.5 140.2 192.9 225.9 186.8 222.6 347.3 137"
+                       fill="rgba(255,250,238,.32)"/>
             </g>
             <g class="lid__seam">
               <path d="M198.2 223.1 348.2 143.1" stroke="rgba(70,44,18,.42)" stroke-width="1.2"/>
               <path d="M199.6 222 349.6 142" stroke="rgba(255,248,230,.22)" stroke-width="1"/>
-            </g>
-            <!-- the tape is split along the seam: each half stays stuck to its flap,
-                 and neither may be written past the rim -->
-            <g class="lid__tape" clip-path="url(#mouthClip)">
-              <polygon class="tape" data-tape="near" points="353.5 140.2 192.9 225.9 186.8 222.6 347.3 137"
-                       fill="rgba(255,250,238,.32)"/>
-              <polygon class="tape" data-tape="far" points="359.7 143.5 199.1 229.2 192.9 225.9 353.5 140.2"
-                       fill="rgba(255,250,238,.32)"/>
             </g>
             <!-- written on the lid, so it takes the lid's own two axes: along the
                  seam, and away towards the back of the box -->
@@ -250,6 +249,9 @@
           </g>
 
         </svg>
+
+        <!-- a card taken out of the box is held here, above the drawing -->
+        <div class="layer-held" id="held" aria-hidden="true"></div>
 
         <button class="openlid" id="openlid" type="button" aria-label="Open the box"></button>
 
@@ -359,6 +361,11 @@ evictions: <b>1</b></pre>
     <clipPath id="mouthClip">
       <path d="M260 99.5 406.5 176 260 252.5 113.5 176Z"/>
     </clipPath>
+    <!-- the near flap ends up lying on the front-right wall, so it is allowed
+         inside the mouth and over that wall, and nowhere else -->
+    <clipPath id="hangClip">
+      <path d="M260 99.5 410 176 410 316 260 396 260 252.5 113.5 176Z"/>
+    </clipPath>
   </defs>
 </svg>
 
@@ -383,6 +390,7 @@ if (forced === "shout" || (forced !== "hand" && Math.random() < 0.2)) {
 }
 
 const cardsEl = document.getElementById("cards");
+const heldEl = document.getElementById("held");
 const trayEl = document.getElementById("tray");
 const hintEl = document.getElementById("hint");
 const box = {
@@ -413,7 +421,8 @@ function paint() {
 
 function card(key, value, extra) {
   const el = document.createElement("div");
-  el.className = "slot" + (extra ? " " + extra : "");
+  el.className = "slot landing" + (extra ? " " + extra : "");
+  setTimeout(() => el.classList.remove("landing"), 480);
   el.innerHTML = '<div class="cardface"><span class="k"></span><span class="v"></span></div>';
   el.querySelector(".k").textContent = key;
   el.querySelector(".v").textContent = value;
@@ -472,9 +481,28 @@ function put(key, value) {
   paint();
 }
 
+/* Taking a card: it comes out of the box and is held up, then goes back. */
+let heldTimer = null;
+function takeCard(el) {
+  if (el.parentElement === heldEl) return;
+  const home = el.nextSibling;
+  heldEl.appendChild(el);
+  el.classList.add("is-drawn");
+  clearTimeout(heldTimer);
+  heldTimer = setTimeout(() => {
+    el.classList.remove("is-drawn");
+    setTimeout(() => {
+      if (el.parentElement !== heldEl) return;
+      /* back into its own place in the fan, not on top of the others */
+      cardsEl.insertBefore(el, home && home.parentElement === cardsEl ? home : null);
+    }, 300);
+  }, 780);
+}
+
 function ask(key, el) {
   if (!engine) return;
   const [state] = engine.mk_get(key).split("\t");
+  takeCard(el);
   if (state === "hit") {
     flash(el);
     hintEl.textContent = `${key}: a hit. Nothing had to be computed.`;
@@ -598,6 +626,10 @@ const swingEase = (k) => {
   return v + rock;
 };
 const HALF_PI = Math.PI / 2;
+/* where each flap comes to rest: the near one hangs just past upright on the
+   front wall, the far one folds back over the rim and is gone behind it */
+const PHI_NEAR = HALF_PI * 1.06;
+const PHI_FAR = -HALF_PI;
 
 function drawLid(phiNear, phiFar) {
   setFlap(flapNear, NEAR_CORNERS.map(([s, t]) => project(NEAR, s, t, phiNear)));
@@ -605,24 +637,22 @@ function drawLid(phiNear, phiFar) {
   tapeNear.setAttribute("points", asPoints(TAPE_NEAR.map(([s, t]) => project(NEAR, s, t, phiNear))));
   tapeFar.setAttribute("points", asPoints(TAPE_FAR.map(([s, t]) => project(FAR, s, t, phiFar))));
 
-  /* Both flaps turn up and over, away from the inside of the box: the near one
-     towards the eye, the far one away behind the rim. Either turns its back on
-     the light, and both leave through the rim, which is what closes the line
-     they are drawn along. */
-  const shade = 1.04 - 0.08 * Math.abs(Math.sin(phiNear));
+  /* The near flap turns towards the eye and stays there, so we end up looking
+     at its back: it goes a little darker as it comes over. The far one turns
+     away and slips under the rim, which is the only thing that hides it. */
+  const shade = 1.03 - 0.16 * Math.sin(Math.min(Math.abs(phiNear), HALF_PI * 1.06) / HALF_PI);
   flapNear.querySelector(".flap__body").style.filter = `brightness(${shade.toFixed(3)})`;
   const farShade = 1.02 - 0.5 * Math.abs(Math.sin(phiFar));
   flapFar.style.filter = `brightness(${farShade.toFixed(3)})`;
-  /* the last few degrees are already past the rim, where neither face is seen */
-  const into = (phi) => 1 - Math.min(1, Math.max(0, (Math.abs(phi) / HALF_PI - 0.6) / 0.4));
-  flapNear.style.opacity = String(into(phiNear));
-  flapFar.style.opacity = String(into(phiFar));
+  /* the far flap fades only in the last degrees, once it is behind the board */
+  flapFar.style.opacity =
+    String(1 - Math.min(1, Math.max(0, (Math.abs(phiFar) / HALF_PI - 0.74) / 0.26)));
 }
 
 const lidOpen = () => root.dataset.lid === "open";
 
 if (lidOpen()) {
-  drawLid(-HALF_PI, HALF_PI);
+  drawLid(PHI_NEAR, PHI_FAR);
 } else {
   drawLid(0, 0);
   trayEl.classList.add("is-locked");
@@ -635,6 +665,7 @@ function dropCards() {
     c.el.classList.remove("replay");
     void c.el.offsetWidth;
     c.el.classList.add("replay");
+    setTimeout(() => c.el.classList.remove("replay"), 900);
   });
 }
 
@@ -652,7 +683,7 @@ function openLid() {
 
   /* the box still opens, it just does not perform */
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    drawLid(-HALF_PI, HALF_PI);
+    drawLid(PHI_NEAR, PHI_FAR);
     root.dataset.lid = "open";
     dropCards();
     hintEl.textContent = "Click a card in the box to ask for it again.";
@@ -674,8 +705,8 @@ function openLid() {
 
     /* both flaps turn up and over, away from the inside of the box: the near
        one towards the eye, the far one away. Same sign, opposite sides. */
-    const phiNear = -HALF_PI * swingEase(span(t, 0.05, 0.95));
-    const phiFar = -HALF_PI * swingEase(span(t, 0.07, 0.8));
+    const phiNear = PHI_NEAR * swingEase(span(t, 0.05, 0.95));
+    const phiFar = PHI_FAR * swingEase(span(t, 0.07, 0.85));
     drawLid(phiNear, phiFar);
 
     if (!dropped && t > 0.3) {
@@ -685,7 +716,7 @@ function openLid() {
     }
     if (t < 1) return requestAnimationFrame(step);
 
-    drawLid(-HALF_PI, HALF_PI);
+    drawLid(PHI_NEAR, PHI_FAR);
     root.dataset.lid = "open";
     cutting = false;
   };
