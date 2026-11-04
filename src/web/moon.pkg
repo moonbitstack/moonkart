@@ -1,0 +1,7 @@
+// The demonstration engine for the documentation site: the cache compiled to JS,
+// with a small string-based surface the page can call.
+pkgtype(kind: "foreign_library")
+
+import {
+  "moonbitstack/moonkart",
+}

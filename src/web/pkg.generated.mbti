@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitstack/moonkart/web"
+
+// Values
+pub fn mk_get(String) -> String
+
+pub fn mk_reset(Int32) -> Unit
+
+pub fn mk_set(String, String) -> String
+
+pub fn mk_stats() -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
