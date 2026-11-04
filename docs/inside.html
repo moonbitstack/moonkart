@@ -293,7 +293,7 @@ function paintSurvey(rows) {
     col.innerHTML = `
       <p class="col__policy">${label(row.policy)}</p>
       <p class="col__hits"><b>${kept}</b> of ${HOT.length} kept &middot; ${row.hits} hits in ${CUT_LEN}</p>
-      <div class="bar"><i style="--w:${pct}%"></i></div>
+      <div class="meter"><i style="--w:${pct}%"></i></div>
       <ul class="kept"></ul>`;
     const list = col.querySelector(".kept");
     HOT.forEach((name, i) => {
