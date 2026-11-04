@@ -14,6 +14,7 @@
   /* the workbench the boards lie on */
   --desk:#241a12;
   --desk-2:#3a2a1c;
+  --void:#0f0904;
 
   /* the board itself */
   --face:#d8b787;
@@ -40,7 +41,8 @@
   --page:min(1240px, calc(100% - 3rem));
 
   /* corrugated cross-section: two liners with a wave between them */
-  --flute:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23a97f4d'/%3E%3Cpath d='M0 12.4 Q4 4.4 8 12.4 T16 12.4' fill='none' stroke='%23714e2a' stroke-width='1.5'/%3E%3Crect width='16' height='2.6' fill='%23e9cd9e'/%3E%3Crect y='13.4' width='16' height='2.6' fill='%23cfae7d'/%3E%3C/svg%3E");
+  --flute:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23a97f4d'/%3E%3Cpath d='M0 12.4 Q4 4.4 8 12.4 T16 12.4' fill='none' stroke='%23714e2a' stroke-width='1.5'/%3E%3Crect width='16' height='2.6' fill='%23e9cd9e'/%3Crect y='13.4' width='16' height='2.6' fill='%23cfae7d'/%3E%3C/svg%3E");
+  --fluteV:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='26'%3E%3Crect width='22' height='26' fill='%23a97f4d'/%3E%3Cpath d='M16 0 Q7 6.5 16 13 T16 26' fill='none' stroke='%23714e2a' stroke-width='1.6'/%3E%3Crect width='2.8' height='26' fill='%23e9cd9e'/%3E%3Crect x='19.2' width='2.8' height='26' fill='%23cfae7d'/%3E%3C/svg%3E");
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -51,9 +53,8 @@ body{
   font-size:19px;
   line-height:1.62;
   background:
-    radial-gradient(90% 60% at 50% -6%, #4b3623 0%, transparent 58%),
-    radial-gradient(120% 100% at 50% 120%, #2b1e14 0%, transparent 60%),
-    var(--desk);
+    radial-gradient(70% 46% at 50% -4%, #37250f 0%, transparent 62%),
+    var(--void);
   overflow-x:clip;
   -webkit-font-smoothing:antialiased;
 }
@@ -64,7 +65,15 @@ body{
 .grain::after{content:"";position:absolute;inset:0;opacity:.6;
   background-image:repeating-linear-gradient(88deg, rgba(90,60,30,.07) 0 1px, transparent 1px 3px);}
 .lamp{position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:radial-gradient(60% 42% at 62% 12%, rgba(255,196,120,.14), transparent 70%);}
+  background:radial-gradient(60% 42% at 62% 12%, rgba(255,196,120,.13), transparent 70%);}
+/* the side walls: you are looking into the carton */
+.walls{position:fixed;inset:0;z-index:45;pointer-events:none}
+.walls i{position:absolute;top:0;bottom:0;width:26px;
+  background-image:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,0) 12%),var(--fluteV);
+  background-size:auto,22px 26px;background-repeat:no-repeat,repeat-y;
+  box-shadow:inset -10px 0 12px -10px rgba(0,0,0,.85)}
+.walls i:first-child{left:0}
+.walls i:last-child{right:15px;transform:scaleX(-1)}
 
 /* scrollbar: a strip of corrugated edge */
 @supports selector(::-webkit-scrollbar){
@@ -80,14 +89,18 @@ body{
   html.at-top{scrollbar-color:transparent transparent}
 }
 
-.wrap{position:relative;z-index:1;overflow-x:clip}
-.page{width:var(--page);margin:0 auto;position:relative}
+.shell{position:relative;z-index:1;overflow-x:clip;
+  width:min(1300px, calc(100% - 104px));margin:0 auto;
+  display:grid;gap:32px;padding:16px 0 60px}
+.shell > main{display:contents}
 
 /* ── a board: face, fibre, and a cut edge you can see ────── */
-.board{
+.panel{
   position:relative;
-  background:
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23f)' opacity='.22'/%3E%3C/svg%3E"),
     linear-gradient(168deg, color-mix(in srgb,var(--face-hi) 88%, #fff) 0%, var(--face) 42%, var(--face-lo) 100%);
+  background-blend-mode:multiply,normal;
   border-radius:1px;
   box-shadow:
     inset 0 1px 0 rgba(255,246,225,.55),
@@ -97,7 +110,7 @@ body{
   transform: rotate(var(--tilt,-.55deg));
 }
 /* the wave, seen edge-on: this is the whole point */
-.board::after{
+.panel::after{
   content:"";
   position:absolute; left:0; right:0; bottom:-15px; height:20px;
   background-image:var(--flute);
@@ -109,17 +122,22 @@ body{
   pointer-events:none;
   z-index:-1;
 }
-.board::before{
+/* tape across the seam above each board: this is what holds the box together */
+.panel::before{
   content:"";
-  position:absolute; inset:0; pointer-events:none; border-radius:1px;
-  opacity:.5; mix-blend-mode:multiply;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23f)' opacity='.35'/%3E%3C/svg%3E");
+  position:absolute; top:-23px; left:var(--tape-x,7%); width:var(--tape-w,104px); height:36px;
+  background:linear-gradient(180deg, rgba(238,219,180,.72), rgba(226,205,158,.6));
+  transform:rotate(-1.6deg);
+  box-shadow:0 1px 3px rgba(0,0,0,.28);
+  border-left:1px solid rgba(255,255,255,.4);
+  border-right:1px solid rgba(109,74,41,.22);
+  pointer-events:none;
 }
+.bar::before,.foot::before{display:none}
 
 /* ── top: a shipping ticket taped on ─────────────────────── */
-.bar{position:relative;z-index:40;height:var(--bar);display:flex;align-items:center;
-  justify-content:space-between;gap:16px;width:var(--page);margin:0 auto;
-  padding-top:14px}
+.bar{z-index:40;min-height:var(--bar);display:flex;align-items:center;
+  justify-content:space-between;gap:16px;padding:13px 22px;--tilt:-.2deg}
 .ticket{
   display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink);
   background:var(--paper);
@@ -142,17 +160,16 @@ body{
 .ticket__no b{display:block;font-weight:600;color:#5e4423}
 
 .nav{display:flex;align-items:center;gap:4px}
-.nav a{font-family:var(--hand);font-size:21px;font-weight:600;color:#e2c8a0;text-decoration:none;
+.nav a{font-family:var(--hand);font-size:21px;font-weight:600;color:var(--ink-2);text-decoration:none;
   padding:6px 12px;border-radius:2px;transition:color .16s,background-color .16s}
-.nav a:hover{color:#fff6e2;background:rgba(226,200,160,.12)}
+.nav a:hover{color:var(--ink);background:rgba(38,25,15,.1)}
 .nav svg{width:16px;height:16px;position:relative;top:-1px;margin-right:6px}
 
 /* ── hero ────────────────────────────────────────────────── */
 .hero{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);
-  align-items:start;gap:clamp(10px,2.4vw,34px);padding:clamp(26px,5vh,54px) 0 clamp(14px,2.6vh,30px)}
+  align-items:start;gap:clamp(10px,2.4vw,34px);padding:0}
 
-.hero__board{padding:clamp(26px,3.4vw,50px) clamp(24px,3vw,46px) clamp(34px,4vw,54px);
-  margin-top:8px;--tilt:-.85deg;z-index:2}
+.hero__copy{position:relative;z-index:2;padding:clamp(26px,3.4vw,50px) clamp(24px,3vw,46px) clamp(34px,4vw,54px)}
 .kicker{font-family:var(--hand);font-size:22px;font-weight:600;color:var(--ink-3);
   margin:0 0 2px;display:flex;align-items:center;gap:12px}
 .kicker::after{content:"";height:1px;flex:1;max-width:120px;
@@ -187,7 +204,7 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
 .layer-cards{z-index:2;position:absolute;inset:0}
 .layer-front{z-index:3}
 
-.slot{position:absolute;width:26%;height:26%;transform-origin:50% 100%;
+.slot{position:absolute;width:24%;height:24%;transform-origin:50% 100%;
   transition:transform .45s cubic-bezier(.2,.8,.3,1),opacity .3s}
 .slot[hidden]{display:none}
 .cardface{
@@ -259,12 +276,12 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
   stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
 /* ── specs: four boards laid down ────────────────────────── */
-.specs{padding:clamp(30px,4.5vh,54px) 0;display:grid;align-items:start;gap:22px 20px;
+.specs{display:grid;align-items:start;gap:24px 20px;
   grid-template-columns:repeat(auto-fit,minmax(232px,1fr))}
 .spec{padding:20px 20px 24px;--tilt:.5deg}
-.spec:nth-child(2){--tilt:-.35deg;margin-top:10px}
-.spec:nth-child(3){--tilt:.7deg}
-.spec:nth-child(4){--tilt:-.6deg;margin-top:14px}
+.spec:nth-child(2){--tilt:-.35deg;margin-top:10px;--tape-x:52%;--tape-w:88px}
+.spec:nth-child(3){--tilt:.7deg;--tape-x:26%;--tape-w:120px}
+.spec:nth-child(4){--tilt:-.6deg;margin-top:14px;--tape-x:70%;--tape-w:96px}
 .spec__n{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);
   display:block;margin-bottom:6px}
 .spec__h{font-family:var(--hand);font-weight:700;font-size:28px;line-height:1;margin:0 0 7px}
@@ -273,8 +290,7 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
   background:rgba(38,25,15,.1);border:1px solid rgba(38,25,15,.14);overflow-wrap:anywhere}
 
 /* ── code: a label stuck on a board ──────────────────────── */
-.code{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr);gap:26px;
-  padding:clamp(30px,5vh,58px) 0}
+.code{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr);gap:24px}
 .code__board{padding:clamp(20px,2.4vw,34px);--tilt:-.4deg}
 .label{position:relative;background:var(--paper);border-radius:1px;padding:24px 22px 20px;
   box-shadow:0 1px 0 rgba(255,255,255,.7) inset,0 2px 0 rgba(150,118,76,.45),0 16px 24px -20px rgba(0,0,0,.9);
@@ -296,39 +312,46 @@ pre::-webkit-scrollbar-track{background:transparent}
 pre::-webkit-scrollbar-thumb{background:rgba(122,95,60,.3);border-radius:0}
 pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 
-.out{padding:20px 18px;--tilt:.9deg;margin-top:34px}
+.out{padding:20px 18px;--tilt:.9deg;margin-top:34px;--tape-x:58%;--tape-w:92px}
 .out__tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:0 0 10px}
 .out pre{font-size:13.5px;line-height:1.95;white-space:pre-wrap;overflow-wrap:anywhere;
   font-family:var(--mono);color:#4a3423}
 .out pre b{color:var(--ink);font-weight:600}
 
 /* ── footer ──────────────────────────────────────────────── */
-.foot{padding:clamp(30px,5vh,52px) 0 clamp(46px,7vh,80px);display:flex;flex-wrap:wrap;
+.foot{padding:clamp(22px,3vh,34px) clamp(20px,2.4vw,32px);display:flex;flex-wrap:wrap;
   gap:24px 40px;align-items:flex-end;justify-content:space-between;position:relative}
-.foot__note{font-family:var(--hand);font-size:21px;color:#d9bd95;margin:0 0 6px}
-.foot__lic{font-family:var(--mono);font-size:11.5px;color:#a08360;letter-spacing:.04em;margin:0}
+.foot__note{font-family:var(--hand);font-size:21px;color:var(--ink-2);margin:0 0 6px}
+.foot__lic{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);letter-spacing:.04em;margin:0}
 .foot__links{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center}
-.foot__links a{font-family:var(--hand);font-size:19px;color:#d9bd95;text-decoration:none;
-  border-bottom:1px dashed rgba(217,189,149,.4)}
-.foot__links a:hover{color:#fff3dd;border-bottom-color:#fff3dd}
-.stamp{width:104px;height:104px;border-radius:50%;border:2px solid rgba(168,52,42,.5);
-  color:#c86a55;display:grid;place-items:center;text-align:center;transform:rotate(-12deg);
+.foot__links a{font-family:var(--hand);font-size:19px;color:var(--ink-2);text-decoration:none;
+  border-bottom:1px dashed rgba(38,25,15,.35)}
+.foot__links a:hover{color:var(--ink);border-bottom-color:var(--ink)}
+.stamp{width:104px;height:104px;border-radius:50%;border:2.5px solid rgba(150,44,34,.62);
+  color:#a8342a;display:grid;place-items:center;text-align:center;transform:rotate(-12deg);
   font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;line-height:1.7;
-  box-shadow:inset 0 0 0 3px rgba(168,52,42,.1)}
+  box-shadow:inset 0 0 0 3px rgba(150,44,34,.12)}
 .stamp b{display:block;font-size:13px;letter-spacing:.08em;margin-bottom:1px}
 
 @media (width <= 940px){
-  :root{--bar:66px}
-  .hero{grid-template-columns:minmax(0,1fr);gap:14px}
-  .demo{order:-1;max-width:540px;margin:0 auto}
-  .code{grid-template-columns:minmax(0,1fr)}
-  .nav a{padding:5px 8px;font-size:19px}
+  :root{--bar:60px}
+  .shell{width:calc(100% - 78px);gap:26px}
+  .hero{grid-template-columns:minmax(0,1fr);gap:0;--tilt:0deg}
+  .hero__copy{padding:22px 18px 26px}
+  .demo{order:-1;padding:16px 12px 6px;margin:0}
+  .readout{right:0;bottom:0;width:38%;min-width:132px;font-size:9px}
+  .scribble{display:none}
+  .ticket__no{display:none}
+  .bar{padding:10px 14px}
+  .nav a{padding:5px 7px;font-size:19px}
+  .nav a span{display:none}
   .slip{font-size:16px;padding:7px 9px 8px}
   .slip span{font-size:8.5px}
   .tray{gap:6px}
-  .nav a span{display:none}
   .facts li{flex-basis:100%}
+  .code{grid-template-columns:minmax(0,1fr)}
   .foot{align-items:flex-start}
+  .stamp{width:86px;height:86px}
 }
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001ms !important;transition-duration:.001ms !important}
@@ -338,9 +361,10 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 <body>
 <div class="lamp" aria-hidden="true"></div>
 <div class="grain" aria-hidden="true"></div>
-<div class="wrap">
+<div class="walls" aria-hidden="true"><i></i><i></i></div>
+<div class="shell">
 
-<header class="bar">
+<header class="bar panel">
   <a class="ticket" href="./index.html">
     <svg class="ticket__mark" viewBox="0 0 32 32" aria-hidden="true">
       <path d="M4 11.5 16 5l12 6.5v14L16 32 4 25.5z" fill="#e8cea0" stroke="#6b4a2f" stroke-width="1.7" stroke-linejoin="round"/>
@@ -359,10 +383,10 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
   </nav>
 </header>
 
-<main class="page">
+<main>
 
-  <section class="hero">
-    <div class="board hero__board">
+  <section class="hero panel">
+    <div class="hero__copy">
       <p class="kicker">A cache for MoonBit</p>
       <h1 class="title">moonkart
         <svg viewBox="0 0 330 12" preserveAspectRatio="none" aria-hidden="true">
@@ -493,25 +517,25 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
   </section>
 
   <section class="specs">
-    <article class="board spec">
+    <article class="panel spec">
       <span class="spec__n">01 / CAPACITY</span>
       <h2 class="spec__h">Bounded</h2>
       <p class="spec__p">Cap by entry count with <code>cap</code>, or by total size with
         <code>max_weight</code> and a <code>weigher</code> when values differ.</p>
     </article>
-    <article class="board spec">
+    <article class="panel spec">
       <span class="spec__n">02 / TIME</span>
       <h2 class="spec__h">Expires</h2>
       <p class="spec__p">Time to live, time to idle, or a rule of your own, per entry.
         The clock is a parameter, so a test moves a number instead of sleeping.</p>
     </article>
-    <article class="board spec">
+    <article class="panel spec">
       <span class="spec__n">03 / LOADING</span>
       <h2 class="spec__h">Loads once</h2>
       <p class="spec__p">Readers of the same missing key wait for one loader and share
         its answer. If it raises, every reader gets that error and nothing is stored.</p>
     </article>
-    <article class="board spec">
+    <article class="panel spec">
       <span class="spec__n">04 / POLICY</span>
       <h2 class="spec__h">Swappable</h2>
       <p class="spec__p">W-TinyLFU by default, LRU and S3-FIFO when you want them, and
@@ -520,7 +544,7 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
   </section>
 
   <section class="code">
-    <div class="board code__board">
+    <div class="panel code__board">
       <p class="label__tag" style="color:#6d4a29">THE SAME THREE CALLS, ON A BOX THAT HOLDS TWO</p>
       <div class="label">
 <pre><code><span class="c-key">let</span> cache = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">2L</span>)
@@ -530,7 +554,7 @@ cache.<span class="c-fn">get</span>(<span class="c-str">"a"</span>)      <span c
 cache.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span class="c-num">3</span>)   <span class="c-com">// full: "b" leaves</span></code></pre>
       </div>
     </div>
-    <div class="board out">
+    <div class="panel out">
       <p class="out__tag">WHAT IT PRINTS</p>
 <pre>a is present: <b>true</b>
 read a: <b>1</b>
@@ -541,7 +565,7 @@ evictions: <b>1</b></pre>
     </div>
   </section>
 
-  <footer class="foot">
+  <footer class="foot panel">
     <div>
       <p class="foot__note">Made of cardboard, and MoonBit.</p>
       <p class="foot__lic">Apache 2.0</p>
@@ -571,8 +595,8 @@ evictions: <b>1</b></pre>
 
 <script type="module">
 const SLOTS = [
-  { left: "17%", top: "26%", rot: -4 },
-  { left: "57%", top: "26%", rot: 4 },
+  { left: "29%", top: "30%", rot: -5 },
+  { left: "45%", top: "33%", rot: 4 },
 ];
 const CAP = 2;
 const desk = [];
