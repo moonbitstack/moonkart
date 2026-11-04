@@ -3,18 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>API — moonkart</title>
+<title>API &mdash; moonkart</title>
 <meta name="description" content="Every public type, function and method in moonkart, generated from the package interfaces.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23c9a678'/%3E%3Cpath d='M5 12 16 6l11 6v14l-11 6-11-6z' fill='%23e0c69e' stroke='%236b4a2f' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M5 12l11 6 11-6M16 18v14' stroke='%236b4a2f' stroke-width='1.6' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@300;400;700&family=Permanent+Marker&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./site.css">
+<script src="./shell.js" defer></script>
 </head>
 <body>
 <div class="lamp" aria-hidden="true"></div>
-<div class="walls" aria-hidden="true"><i></i><i></i></div>
 <div class="grain" aria-hidden="true"></div>
+<div class="walls" aria-hidden="true"><i></i><b></b></div>
+<div class="rail" aria-hidden="true"><span class="rail__thumb"></span></div>
 <div class="shell doc">
 
 <header class="bar panel">
@@ -29,10 +31,7 @@
   <nav class="nav" aria-label="Main">
     <a href="./index.html">Home</a>
     <a href="./guide.html">Guide</a>
-    <a href="https://github.com/moonbitstack/moonkart">
-      <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-      <span>GitHub</span>
-    </a>
+    <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
   </nav>
 </header>
 
@@ -52,78 +51,118 @@
 <p>The cache itself: constructors, reads and writes, expiry, invalidation, and the counters.</p>
 <h3 class="api__h">Functions and values</h3><dl class="api">
 <dt><code>fn[K, V] default_config() -&gt; Config[K, V]</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
+<dd>A config with every knob at its default: no weigher (each entry weighs one), the system clock, no expiry, no listener.</dd>
 <dt><code>fn[K, V] infallible_loader((K) -&gt; V) -&gt; (K) -&gt; V raise</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
+<dd>Adapts an infallible loader to the raising loader type <code><code>get_with</code></code> and <code><code>try_get_with</code></code> accept. Use it when producing a value cannot fail, so the call site needs no error handling while still sharing one read path.</dd>
 <dt><code>fn[K : Eq + Hash, V] lru_cache(cap? : Int64, max_weight? : Int64, weigher? : (K, V) -&gt; Int64, clock? : () -&gt; Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -&gt; Unit) -&gt; Cache[K, V]</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
+<dd>A cache that evicts least-recently-used entries.</dd>
 <dt><code>fn[K : Eq + Hash, V] new(&amp;@policy.Policy, weigher? : (K, V) -&gt; Int64, clock? : () -&gt; Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -&gt; Unit) -&gt; Cache[K, V]</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
+<dd>Builds a cache from a policy and the individual knobs. Capacity belongs to the policy: pass <code>cap</code> or <code>max_weight</code> to the policy preset, not here.</dd>
 <dt><code>fn[K : Eq + Hash, V] new_with_config(&amp;@policy.Policy, Config[K, V]) -&gt; Cache[K, V]</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
+<dd>Builds a cache from a policy and a <code><code>Config</code></code> bundle.</dd>
 <dt><code>fn[K : Eq + Hash, V] s3fifo_cache(cap? : Int64, max_weight? : Int64, weigher? : (K, V) -&gt; Int64, clock? : () -&gt; Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -&gt; Unit) -&gt; Cache[K, V]</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
-<dt><code>fn[K : Eq + Hash, V] tinylfu_cache(cap? : Int64, max_weight? : Int64, window_ratio? : Double, protected_ratio? : Double, weigher? : (K, V) -&gt; Int64, clock? : () -&gt; Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -&gt; Unit) -&gt; Cache[K, V]</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
-<dt><code>fn[K, V] tti(Int64) -&gt; Expiry[K, V]</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
-<dt><code>fn[K, V] ttl(Int64) -&gt; Expiry[K, V]</code></dt>
-<dd><span class='api__none'>No description yet.</span></dd>
-<dt><code>system_clock() -&gt; Int64</code></dt>
+<dd>A cache using the S3-FIFO-inspired second-chance FIFO: entries that were read since they entered get another round before eviction, which resists scan and one-hit-wonder patterns.</dd>
+<dt><code>fn system_clock() -&gt; Int64</code></dt>
 <dd>The default clock, built from the runtime clock in milliseconds. Callers may pass their own clock to make expiry deterministic.</dd>
+<dt><code>fn[K : Eq + Hash, V] tinylfu_cache(cap? : Int64, max_weight? : Int64, window_ratio? : Double, protected_ratio? : Double, weigher? : (K, V) -&gt; Int64, clock? : () -&gt; Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -&gt; Unit) -&gt; Cache[K, V]</code></dt>
+<dd>A cache using W-TinyLFU (the default): a small admission window feeds a frequency-guarded segmented LRU, so frequently used entries survive even after they age out of recency.</dd>
+<dt><code>fn[K, V] tti(Int64) -&gt; Expiry[K, V]</code></dt>
+<dd>Time-to-idle: the entry expires <code>duration</code> nanoseconds after its most recent read or write.</dd>
+<dt><code>fn[K, V] ttl(Int64) -&gt; Expiry[K, V]</code></dt>
+<dd>Time-to-live measured from creation: the entry expires <code>duration</code> nanoseconds after it is written and is not refreshed by reads.</dd>
 </dl>
 <h3 class="api__h">Types and methods</h3><dl class="api">
-<dt><code>CacheStats::hit_rate(Self) -&gt; Double</code></dt>
-<dd>Fraction of reads that hit, in `0.0 ..= 1.0`. Zero reads reports `0.0` rather than dividing by zero.</dd>
-<dt><code>CacheStats::miss_rate(Self) -&gt; Double</code></dt>
-<dd>Fraction of reads that hit, in `0.0 ..= 1.0`. Zero reads reports `0.0` rather than dividing by zero.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::contains(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::entry(Self[K, V], K) -&gt; Entry[K, V]</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::entry_or_null(Self[K, V], K) -&gt; Entry[K, V]?</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::get(Self[K, V], K) -&gt; V?</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V, E : Error] Cache::get_with(Self[K, V], K, (K) -&gt; V raise E) -&gt; V raise E</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::invalidate(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::invalidate_all(Self[K, V]) -&gt; Unit</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::invalidate_if(Self[K, V], (K, V) -&gt; Bool) -&gt; Int64</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K, V] Cache::policy_size(Self[K, V]) -&gt; Int32</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::remove(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K, V] Cache::size(Self[K, V]) -&gt; Int64</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K, V] Cache::stats(Self[K, V]) -&gt; CacheStats</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K, V] Cache::to_array(Self[K, V]) -&gt; Array[(K, V)]</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(Self[K, V], K, (K) -&gt; V? raise E) -&gt; V? raise E</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dt><code>fn CacheStats::hit_rate(Self) -&gt; Double</code></dt>
+<dd>Fraction of reads that hit, in <code>0.0 ..= 1.0</code>. Zero reads reports <code>0.0</code> rather than dividing by zero.</dd>
+<dt><code>fn CacheStats::miss_rate(Self) -&gt; Double</code></dt>
+<dd>Fraction of reads that hit, in <code>0.0 ..= 1.0</code>. Zero reads reports <code>0.0</code> rather than dividing by zero.</dd>
 </dl>
 </section>
 <section class="chapter panel" id="concurrent">
 <span class="chapter__eyebrow">moonbitstack/moonkart/concurrent</span>
 <h2>concurrent</h2>
 <p>The same cache behind an await, with loads coalesced per key.</p>
+<h3 class="api__h">Types and methods</h3><dl class="api">
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::get(Self[K, V], K) -&gt; V?</code></dt>
+<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dt><code>fn[K, V] AsyncCache::inner(Self[K, V]) -&gt; @moonkart.Cache[K, V]</code></dt>
+<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::new(@moonkart.Cache[K, V]) -&gt; Self[K, V]</code></dt>
+<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
+<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+</dl>
 </section>
 <section class="chapter panel" id="policy">
 <span class="chapter__eyebrow">moonbitstack/moonkart/policy</span>
 <h2>policy</h2>
 <p>Eviction policies. The cache sees them only through this contract, so a third-party policy plugs in without touching it.</p>
 <h3 class="api__h">Functions and values</h3><dl class="api">
-<dt><code>new_lru(cap? : Int64, max_weight? : Int64) -&gt; Lru</code></dt>
-<dd>Creates an LRU policy. Set at most one of `max_weight` (evict by weight) or `cap` (evict by entry count).</dd>
-<dt><code>new_s3fifo(cap? : Int64, max_weight? : Int64) -&gt; S3Fifo</code></dt>
-<dd>Creates an S3-FIFO-inspired second-chance FIFO. Bound by `cap` (entry count) or `max_weight` (total weight).</dd>
-<dt><code>new_tinylfu(cap? : Int64, max_weight? : Int64, window_ratio? : Double, protected_ratio? : Double) -&gt; Tinylfu</code></dt>
-<dd>Creates a W-TinyLFU policy. `window_ratio` sizes the admission window; `protected_ratio` sizes the protected segment of the main region.</dd>
-<dt><code>tinylfu_protected_ratio : Double</code></dt>
+<dt><code>fn new_lru(cap? : Int64, max_weight? : Int64) -&gt; Lru</code></dt>
+<dd>Creates an LRU policy. Set at most one of <code>max_weight</code> (evict by weight) or <code>cap</code> (evict by entry count).</dd>
+<dt><code>fn new_s3fifo(cap? : Int64, max_weight? : Int64) -&gt; S3Fifo</code></dt>
+<dd>Creates an S3-FIFO-inspired second-chance FIFO. Bound by <code>cap</code> (entry count) or <code>max_weight</code> (total weight).</dd>
+<dt><code>fn new_tinylfu(cap? : Int64, max_weight? : Int64, window_ratio? : Double, protected_ratio? : Double) -&gt; Tinylfu</code></dt>
+<dd>Creates a W-TinyLFU policy. <code>window_ratio</code> sizes the admission window; <code>protected_ratio</code> sizes the protected segment of the main region.</dd>
+<dt><code>let tinylfu_protected_ratio : Double</code></dt>
 <dd>Fraction of the main region given to the protected segment in W-TinyLFU. Entries read at least once are promoted here, away from the probation queue.</dd>
-<dt><code>tinylfu_window_ratio : Double</code></dt>
+<dt><code>let tinylfu_window_ratio : Double</code></dt>
 <dd>Fraction of capacity given to the admission window in W-TinyLFU. The window admits new entries before they must earn a place in the main region, so a burst of one-hit wonders does not evict the working set.</dd>
 </dl>
 <h3 class="api__h">Types and methods</h3><dl class="api">
-<dt><code>Lru::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
+<dt><code>fn Lru::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
 <dd>Least-recently-used policy: the entry not touched for the longest time leaves first.</dd>
-<dt><code>Lru::forget(Self, Int64) -&gt; Unit</code></dt>
+<dt><code>fn Lru::forget(Self, Int64) -&gt; Unit</code></dt>
 <dd>Least-recently-used policy: the entry not touched for the longest time leaves first.</dd>
-<dt><code>Lru::hit(Self, Int64, Int32) -&gt; Unit</code></dt>
+<dt><code>fn Lru::hit(Self, Int64, Int32) -&gt; Unit</code></dt>
 <dd>Least-recently-used policy: the entry not touched for the longest time leaves first.</dd>
-<dt><code>Lru::size(Self) -&gt; Int32</code></dt>
+<dt><code>fn Lru::size(Self) -&gt; Int32</code></dt>
 <dd>Least-recently-used policy: the entry not touched for the longest time leaves first.</dd>
-<dt><code>S3Fifo::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
-<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a `visited` bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
-<dt><code>S3Fifo::forget(Self, Int64) -&gt; Unit</code></dt>
-<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a `visited` bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
-<dt><code>S3Fifo::hit(Self, Int64, Int32) -&gt; Unit</code></dt>
-<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a `visited` bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
-<dt><code>S3Fifo::size(Self) -&gt; Int32</code></dt>
-<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a `visited` bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
-<dt><code>Tinylfu::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
+<dt><code>fn S3Fifo::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
+<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a <code>visited</code> bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
+<dt><code>fn S3Fifo::forget(Self, Int64) -&gt; Unit</code></dt>
+<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a <code>visited</code> bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
+<dt><code>fn S3Fifo::hit(Self, Int64, Int32) -&gt; Unit</code></dt>
+<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a <code>visited</code> bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
+<dt><code>fn S3Fifo::size(Self) -&gt; Int32</code></dt>
+<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a <code>visited</code> bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
+<dt><code>fn Tinylfu::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
 <dd>W-TinyLFU policy: a small admission window feeds a segmented LRU (probation and protected) that is guarded by a frequency sketch keyed by the entry&#x27;s key hash, so often-read keys survive even after they age out of recency. This is the cache&#x27;s default strategy.</dd>
-<dt><code>Tinylfu::forget(Self, Int64) -&gt; Unit</code></dt>
+<dt><code>fn Tinylfu::forget(Self, Int64) -&gt; Unit</code></dt>
 <dd>W-TinyLFU policy: a small admission window feeds a segmented LRU (probation and protected) that is guarded by a frequency sketch keyed by the entry&#x27;s key hash, so often-read keys survive even after they age out of recency. This is the cache&#x27;s default strategy.</dd>
-<dt><code>Tinylfu::hit(Self, Int64, Int32) -&gt; Unit</code></dt>
+<dt><code>fn Tinylfu::hit(Self, Int64, Int32) -&gt; Unit</code></dt>
 <dd>W-TinyLFU policy: a small admission window feeds a segmented LRU (probation and protected) that is guarded by a frequency sketch keyed by the entry&#x27;s key hash, so often-read keys survive even after they age out of recency. This is the cache&#x27;s default strategy.</dd>
-<dt><code>Tinylfu::size(Self) -&gt; Int32</code></dt>
+<dt><code>fn Tinylfu::size(Self) -&gt; Int32</code></dt>
 <dd>W-TinyLFU policy: a small admission window feeds a segmented LRU (probation and protected) that is guarded by a frequency sketch keyed by the entry&#x27;s key hash, so often-read keys survive even after they age out of recency. This is the cache&#x27;s default strategy.</dd>
 </dl>
 </section>
@@ -149,13 +188,5 @@
 </footer>
 
 </div>
-<script>
-(() => {
-  const root = document.documentElement;
-  const mark = () => root.classList.toggle("at-top", scrollY === 0);
-  addEventListener("scroll", mark, { passive: true });
-  mark();
-})();
-</script>
 </body>
 </html>

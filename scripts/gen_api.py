@@ -25,7 +25,11 @@ PACKAGES = [
 ]
 
 DOC_BLOCK = re.compile(r"((?:^[ \t]*///.*\n)+)", re.M)
-DECL = re.compile(r"^[ \t]*(?:pub[ \t]+)?(?:fn|struct|enum|let)[ \t]+(?:\[[^\]]*\][ \t]*)?([A-Za-z_][A-Za-z0-9_]*)", re.M)
+DECL = re.compile(
+    r"^[ \t]*(?:pub[ \t]+)?(?:fn|struct|enum|let)(?:[ \t]+|(?=\[))"
+    r"(?:\[[^\]]*\][ \t]*)?([A-Za-z_][A-Za-z0-9_]*)",
+    re.M,
+)
 
 
 def collect_docs(directory: pathlib.Path) -> dict:
@@ -36,6 +40,8 @@ def collect_docs(directory: pathlib.Path) -> dict:
         for match in DOC_BLOCK.finditer(text):
             block = match.group(1)
             rest = text[match.end():]
+            # an attribute such as #warnings may sit between the prose and the item
+            rest = re.sub(r"^(?:[ \t]*#[^\n]*\n)+", "", rest)
             decl = DECL.match(rest)
             if not decl:
                 continue
@@ -64,10 +70,12 @@ def split_signature(line: str):
         body = body[len("pub(all) "):]
     elif body.startswith("pub "):
         body = body[4:]
+    shown = body
     for word in ("fn", "struct", "enum", "type", "let", "impl", "trait"):
-        if body.startswith(word + " "):
+        # `fn[K, V] name(...)` has no space between the keyword and its generics
+        if body.startswith(word + " ") or body.startswith(word + "["):
             kind = word
-            body = body[len(word) + 1:]
+            body = body[len(word):].lstrip()
             break
     body = body.strip()
     # drop a generic parameter list to find the name
@@ -83,7 +91,7 @@ def split_signature(line: str):
                     name_text = name_text[i + 1:].strip()
                     break
     name = re.match(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)?)", name_text)
-    return kind, (name.group(1) if name else body[:40]), body.rstrip("{").strip()
+    return kind, (name.group(1) if name else body[:40]), shown.rstrip("{").strip()
 
 
 def parse_mbti(path: pathlib.Path):
@@ -102,6 +110,14 @@ def parse_mbti(path: pathlib.Path):
         if name in ("struct", "enum"):
             continue
         yield section, kind, name, sig
+
+
+def prose(text: str) -> str:
+    """Escape prose, then let `code` and [name] keep their meaning as code."""
+    out = html.escape(text)
+    out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
+    out = re.sub(r"\[([^\]]+)\]", r"<code>\1</code>", out)
+    return out
 
 
 def render() -> str:
@@ -136,7 +152,7 @@ def render() -> str:
             for kind, name, sig, doc in sorted(items, key=lambda row: row[1].lower()):
                 shown = html.escape(sig)
                 parts.append(f'<dt><code>{shown}</code></dt>')
-                parts.append(f'<dd>{html.escape(doc) if doc else "<span class=\'api__none\'>No description yet.</span>"}</dd>')
+                parts.append(f'<dd>{prose(doc) if doc else "<span class=\'api__none\'>No description yet.</span>"}</dd>')
             parts.append("</dl>")
         parts.append("</section>")
         body.append("\n".join(parts))
@@ -147,18 +163,20 @@ def render() -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>API — moonkart</title>
+<title>API &mdash; moonkart</title>
 <meta name="description" content="Every public type, function and method in moonkart, generated from the package interfaces.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23c9a678'/%3E%3Cpath d='M5 12 16 6l11 6v14l-11 6-11-6z' fill='%23e0c69e' stroke='%236b4a2f' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M5 12l11 6 11-6M16 18v14' stroke='%236b4a2f' stroke-width='1.6' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@300;400;700&family=Permanent+Marker&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./site.css">
+<script src="./shell.js" defer></script>
 </head>
 <body>
 <div class="lamp" aria-hidden="true"></div>
-<div class="walls" aria-hidden="true"><i></i><i></i></div>
 <div class="grain" aria-hidden="true"></div>
+<div class="walls" aria-hidden="true"><i></i><b></b></div>
+<div class="rail" aria-hidden="true"><span class="rail__thumb"></span></div>
 <div class="shell doc">
 
 <header class="bar panel">
@@ -173,10 +191,7 @@ def render() -> str:
   <nav class="nav" aria-label="Main">
     <a href="./index.html">Home</a>
     <a href="./guide.html">Guide</a>
-    <a href="https://github.com/moonbitstack/moonkart">
-      <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-      <span>GitHub</span>
-    </a>
+    <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
   </nav>
 </header>
 
@@ -211,14 +226,6 @@ def render() -> str:
 </footer>
 
 </div>
-<script>
-(() => {{
-  const root = document.documentElement;
-  const mark = () => root.classList.toggle("at-top", scrollY === 0);
-  addEventListener("scroll", mark, {{ passive: true }});
-  mark();
-}})();
-</script>
 </body>
 </html>
 """
