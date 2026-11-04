@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en" class="at-top">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>moonkart — a cache for MoonBit</title>
+<meta name="description" content="A cache for MoonBit: bounded by count or weight, expirable on a clock you control, with W-TinyLFU, LRU and S3-FIFO.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23c9a678'/%3E%3Cpath d='M5 12 16 6l11 6v14l-11 6-11-6z' fill='%23e0c69e' stroke='%236b4a2f' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M5 12l11 6 11-6M16 18v14' stroke='%236b4a2f' stroke-width='1.6' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@300;400;700&family=Permanent+Marker&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* the workbench the boards lie on */
+  --desk:#241a12;
+  --desk-2:#3a2a1c;
+
+  /* the board itself */
+  --face:#d8b787;
+  --face-hi:#ecd0a3;
+  --face-lo:#bb9464;
+  --core:#a97f4d;
+  --liner:#e9cd9e;
+  --edge:#6d4a29;
+  --ink:#26190f;
+  --ink-2:#5a4028;
+  --ink-3:#856743;
+  --pen:#a8342a;
+  --pen-2:#2c5674;
+
+  /* paper stuck on the board */
+  --paper:#f7ecd6;
+  --on-paper:#241a10;
+
+  --hand:'Caveat',cursive;
+  --body:'Kalam',cursive;
+  --marker:'Permanent Marker',cursive;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --bar:74px;
+  --page:min(1240px, calc(100% - 3rem));
+
+  /* corrugated cross-section: two liners with a wave between them */
+  --flute:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' fill='%23a97f4d'/%3E%3Cpath d='M0 12.4 Q4 4.4 8 12.4 T16 12.4' fill='none' stroke='%23714e2a' stroke-width='1.5'/%3E%3Crect width='16' height='2.6' fill='%23e9cd9e'/%3E%3Crect y='13.4' width='16' height='2.6' fill='%23cfae7d'/%3E%3C/svg%3E");
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{background:var(--desk);color:var(--ink)}
+html,button,input,textarea,select{font-variant-ligatures:no-contextual}
+body{
+  font-family:var(--body);
+  font-size:19px;
+  line-height:1.62;
+  background:
+    radial-gradient(90% 60% at 50% -6%, #4b3623 0%, transparent 58%),
+    radial-gradient(120% 100% at 50% 120%, #2b1e14 0%, transparent 60%),
+    var(--desk);
+  overflow-x:clip;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* dust and fibre, over everything */
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.5;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E");}
+.grain::after{content:"";position:absolute;inset:0;opacity:.6;
+  background-image:repeating-linear-gradient(88deg, rgba(90,60,30,.07) 0 1px, transparent 1px 3px);}
+.lamp{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(60% 42% at 62% 12%, rgba(255,196,120,.14), transparent 70%);}
+
+/* scrollbar: a strip of corrugated edge */
+@supports selector(::-webkit-scrollbar){
+  html::-webkit-scrollbar{width:15px;height:15px}
+  html::-webkit-scrollbar-track{background:#1a120b}
+  html::-webkit-scrollbar-thumb{border:4px solid transparent;border-radius:0;background-clip:content-box;
+    background-color:#b98f5f;box-shadow:inset 0 0 0 1px #6d4a29}
+  html::-webkit-scrollbar-thumb:hover{background-color:#e0bd8c}
+  html.at-top::-webkit-scrollbar-thumb{background-color:transparent;box-shadow:none}
+}
+@supports not selector(::-webkit-scrollbar){
+  html{scrollbar-width:thin;scrollbar-color:#b98f5f #1a120b}
+  html.at-top{scrollbar-color:transparent transparent}
+}
+
+.wrap{position:relative;z-index:1;overflow-x:clip}
+.page{width:var(--page);margin:0 auto;position:relative}
+
+/* ── a board: face, fibre, and a cut edge you can see ────── */
+.board{
+  position:relative;
+  background:
+    linear-gradient(168deg, color-mix(in srgb,var(--face-hi) 88%, #fff) 0%, var(--face) 42%, var(--face-lo) 100%);
+  border-radius:1px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,246,225,.55),
+    inset 0 -1px 0 rgba(109,74,41,.35),
+    0 22px 34px -20px rgba(0,0,0,.85),
+    0 4px 10px -6px rgba(0,0,0,.5);
+  transform: rotate(var(--tilt,-.55deg));
+}
+/* the wave, seen edge-on: this is the whole point */
+.board::after{
+  content:"";
+  position:absolute; left:0; right:0; bottom:-15px; height:20px;
+  background-image:var(--flute);
+  background-size:16px 16px;
+  background-repeat:repeat-x;
+  transform:perspective(300px) rotateX(38deg);
+  transform-origin:top center;
+  box-shadow:0 1px 0 rgba(255,240,214,.28) inset;
+  pointer-events:none;
+  z-index:-1;
+}
+.board::before{
+  content:"";
+  position:absolute; inset:0; pointer-events:none; border-radius:1px;
+  opacity:.5; mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23f)' opacity='.35'/%3E%3C/svg%3E");
+}
+
+/* ── top: a shipping ticket taped on ─────────────────────── */
+.bar{position:relative;z-index:40;height:var(--bar);display:flex;align-items:center;
+  justify-content:space-between;gap:16px;width:var(--page);margin:0 auto;
+  padding-top:14px}
+.ticket{
+  display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink);
+  background:var(--paper);
+  padding:7px 15px 7px 11px;
+  border-radius:1px;
+  transform:rotate(-1.1deg);
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 10px 16px -12px rgba(0,0,0,.9);
+  position:relative;
+}
+.ticket::before{
+  content:"";position:absolute;left:-16px;top:50%;width:34px;height:20px;
+  background:rgba(226,205,158,.55);transform:translateY(-50%) rotate(-8deg);
+  box-shadow:0 1px 2px rgba(0,0,0,.25);border-left:1px solid rgba(255,255,255,.4);
+}
+.ticket__mark{width:26px;height:26px;flex:none}
+.ticket__name{font-family:var(--hand);font-weight:700;font-size:28px;line-height:.9;
+  transform:translateY(1px);color:var(--on-paper)}
+.ticket__no{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;color:#8a6d47;
+  border-left:1px dashed #c3a67c;padding-left:11px;line-height:1.35}
+.ticket__no b{display:block;font-weight:600;color:#5e4423}
+
+.nav{display:flex;align-items:center;gap:4px}
+.nav a{font-family:var(--hand);font-size:21px;font-weight:600;color:#e2c8a0;text-decoration:none;
+  padding:6px 12px;border-radius:2px;transition:color .16s,background-color .16s}
+.nav a:hover{color:#fff6e2;background:rgba(226,200,160,.12)}
+.nav svg{width:16px;height:16px;position:relative;top:-1px;margin-right:6px}
+
+/* ── hero ────────────────────────────────────────────────── */
+.hero{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);
+  align-items:start;gap:clamp(10px,2.4vw,34px);padding:clamp(26px,5vh,54px) 0 clamp(14px,2.6vh,30px)}
+
+.hero__board{padding:clamp(26px,3.4vw,50px) clamp(24px,3vw,46px) clamp(34px,4vw,54px);
+  margin-top:8px;--tilt:-.85deg;z-index:2}
+.kicker{font-family:var(--hand);font-size:22px;font-weight:600;color:var(--ink-3);
+  margin:0 0 2px;display:flex;align-items:center;gap:12px}
+.kicker::after{content:"";height:1px;flex:1;max-width:120px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--ink-3) 90%,transparent),transparent)}
+.title{font-family:var(--hand);font-weight:700;font-size:clamp(66px,10.4vw,142px);
+  line-height:.74;letter-spacing:-.035em;margin:0 0 6px;color:var(--ink);
+  text-shadow:0 1px 0 rgba(255,246,225,.5)}
+html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.86;
+  font-size:clamp(40px,5.6vw,76px)}
+.title svg{display:block;width:min(330px,64%);height:12px;margin:-4px 0 18px;overflow:visible}
+.title svg path{stroke:var(--pen);stroke-width:2.6;fill:none;stroke-linecap:round;opacity:.72}
+.lede{font-size:clamp(18px,1.7vw,21px);line-height:1.56;max-width:36ch;color:var(--ink-2);margin:0 0 26px}
+.acts{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.btn{font-family:var(--hand);font-size:21px;font-weight:700;text-decoration:none;
+  padding:9px 21px 11px;border-radius:2px;transition:transform .15s,box-shadow .15s,background-color .15s;
+  display:inline-flex;align-items:center;gap:8px}
+.btn--ink{color:#f6ecda;background:#241a10;
+  box-shadow:0 2px 0 #0d0805, 0 12px 20px -14px rgba(0,0,0,.9)}
+.btn--ink:hover{transform:translateY(-2px)}
+.btn--ghost{color:var(--ink);background:rgba(36,26,16,.06);border:1.5px solid rgba(38,25,15,.32)}
+.btn--ghost:hover{transform:translateY(-2px);background:rgba(36,26,16,.11)}
+.facts{list-style:none;display:flex;flex-wrap:wrap;gap:6px 24px;margin:30px 0 0;padding:14px 0 0;
+  border-top:1px dashed rgba(38,25,15,.3);font-family:var(--hand);font-size:18px;color:var(--ink-2)}
+.facts b{font-family:var(--hand);font-weight:700;font-size:22px;color:var(--ink);margin-right:4px}
+
+/* ── the demo: a box on the desk ─────────────────────────── */
+.demo{position:relative;z-index:3;margin-top:clamp(6px,2vw,26px)}
+.stage{position:relative;width:100%;aspect-ratio:1/1;
+  filter:drop-shadow(0 26px 26px rgba(0,0,0,.55)) drop-shadow(0 46px 60px rgba(0,0,0,.5))}
+.stage svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.layer-back{z-index:1}
+.layer-cards{z-index:2;position:absolute;inset:0}
+.layer-front{z-index:3}
+
+.slot{position:absolute;width:26%;height:26%;transform-origin:50% 100%;
+  transition:transform .45s cubic-bezier(.2,.8,.3,1),opacity .3s}
+.slot[hidden]{display:none}
+.cardface{
+  position:relative;
+  background:linear-gradient(172deg,#fdf4e2,#efe0c2);
+  border:1px solid #b99a6f;border-radius:2px;
+  padding:8px 9px 6px;height:100%;
+  box-shadow:0 2px 0 rgba(150,118,76,.35), 0 8px 14px -10px rgba(0,0,0,.8);
+  animation:drop .42s cubic-bezier(.2,1.2,.4,1) both;
+}
+.cardface .k{display:block;font-family:var(--mono);font-size:8.5px;color:#8a6d47;
+  letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cardface .v{display:block;font-family:var(--hand);font-weight:700;font-size:19px;line-height:1.05;
+  color:#241a10;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot.leaving{transition:none}
+.slot.leaving .cardface{animation:eject .55s ease-in forwards}
+.slot.gone{position:absolute;left:-13%;bottom:4%;width:17%;opacity:.92;
+  transform:rotate(-9deg);cursor:pointer;transition:none}
+.slot.gone .cardface{animation:none;background:linear-gradient(172deg,#e6d5b6,#d8c39c)}
+.slot.gone.miss .cardface{animation:miss .5s ease-out}
+@keyframes miss{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-5px)}40%{transform:translateX(4px)}
+  60%{transform:translateX(-3px)}80%{transform:translateX(2px)}
+}
+.slot.gone .cardface::after{content:"evicted";position:absolute;left:4px;top:-13px;
+  font-family:var(--hand);font-size:13px;font-weight:700;color:#a8342a;transform:rotate(-4deg)}
+.slot.hit .cardface{animation:hit .55s ease-out}
+@keyframes drop{from{opacity:0;transform:translateY(-26px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes eject{to{opacity:0;transform:translate(34px,26px) rotate(16deg) scale(.9)}}
+@keyframes hit{
+  0%{box-shadow:0 0 0 0 rgba(168,52,42,.55),0 2px 0 rgba(150,118,76,.35)}
+  60%{box-shadow:0 0 0 7px rgba(168,52,42,0),0 2px 0 rgba(150,118,76,.35)}
+  100%{box-shadow:0 2px 0 rgba(150,118,76,.35),0 8px 14px -10px rgba(0,0,0,.8)}
+}
+
+.readout{position:absolute;right:-6%;bottom:2%;width:27%;min-width:138px;
+  background:linear-gradient(174deg,#f2de92,#e4c969);
+  padding:10px 12px 12px;transform:rotate(2.2deg);
+  box-shadow:0 2px 0 rgba(160,130,60,.55),0 14px 20px -16px rgba(0,0,0,.9);
+  font-family:var(--mono);font-size:10px;color:#4a3a1c;z-index:4}
+.readout::before{content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%) rotate(-2deg);
+  width:52px;height:16px;background:rgba(255,255,255,.45);border:1px solid rgba(160,140,90,.3)}
+.readout dl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin:0}
+.readout dt{opacity:.72}
+.readout dd{margin:0;font-weight:600;color:#2b2110}
+.readout .tally{font-family:var(--hand);font-size:15px;font-weight:700;color:#7a5f22;
+  margin:0 0 5px;letter-spacing:.04em;text-transform:uppercase}
+
+.tray{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;justify-content:center}
+.slip{
+  font-family:var(--hand);font-weight:700;font-size:18px;line-height:1;
+  color:#241a10;background:linear-gradient(172deg,#fbf1de,#e9d9ba);
+  border:1px solid #bfa27a;border-radius:2px;padding:8px 11px 9px;cursor:pointer;
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 3px 0 rgba(150,118,76,.4);
+  transition:transform .14s,box-shadow .14s,opacity .2s;
+  display:inline-flex;align-items:baseline;gap:6px;
+}
+.slip:hover{transform:translateY(-3px) rotate(-1deg);box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 6px 0 rgba(150,118,76,.4)}
+.slip:active{transform:translateY(0)}
+.slip span{font-family:var(--mono);font-size:9.5px;color:#8a6d47;font-weight:400}
+.slip[data-used]{opacity:.32;pointer-events:none}
+.tray__hint{width:100%;text-align:center;font-family:var(--hand);font-size:18px;color:#c3a276;margin:4px 0 0}
+
+.scribble{position:absolute;right:5%;top:9%;margin:0;font-family:var(--hand);
+  font-weight:700;font-size:18px;line-height:1.05;color:var(--pen);transform:rotate(-3deg);
+  text-align:right;pointer-events:none;opacity:.85}
+.scribble svg{display:block;margin:1px 0 0 auto;stroke:currentColor;fill:none;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── specs: four boards laid down ────────────────────────── */
+.specs{padding:clamp(30px,4.5vh,54px) 0;display:grid;align-items:start;gap:22px 20px;
+  grid-template-columns:repeat(auto-fit,minmax(232px,1fr))}
+.spec{padding:20px 20px 24px;--tilt:.5deg}
+.spec:nth-child(2){--tilt:-.35deg;margin-top:10px}
+.spec:nth-child(3){--tilt:.7deg}
+.spec:nth-child(4){--tilt:-.6deg;margin-top:14px}
+.spec__n{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);
+  display:block;margin-bottom:6px}
+.spec__h{font-family:var(--hand);font-weight:700;font-size:28px;line-height:1;margin:0 0 7px}
+.spec__p{margin:0;font-size:17px;line-height:1.62;color:var(--ink-2)}
+.spec__p code{font-family:var(--mono);font-size:.82em;padding:1px 4px;border-radius:2px;
+  background:rgba(38,25,15,.1);border:1px solid rgba(38,25,15,.14);overflow-wrap:anywhere}
+
+/* ── code: a label stuck on a board ──────────────────────── */
+.code{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.7fr);gap:26px;
+  padding:clamp(30px,5vh,58px) 0}
+.code__board{padding:clamp(20px,2.4vw,34px);--tilt:-.4deg}
+.label{position:relative;background:var(--paper);border-radius:1px;padding:24px 22px 20px;
+  box-shadow:0 1px 0 rgba(255,255,255,.7) inset,0 2px 0 rgba(150,118,76,.45),0 16px 24px -20px rgba(0,0,0,.9);
+  transform:rotate(.45deg)}
+.label::before{content:"";position:absolute;top:-11px;left:34px;width:96px;height:21px;
+  background:rgba(226,205,158,.6);border-left:1px solid rgba(255,255,255,.45);
+  transform:rotate(-2deg);box-shadow:0 1px 2px rgba(0,0,0,.18)}
+.label__tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:#8a6d47;margin:0 0 12px}
+pre{margin:0;font-family:var(--mono);font-size:15px;line-height:1.82;overflow-x:auto;color:var(--on-paper)}
+pre code{font-family:inherit}
+.c-key{color:#2a5372;font-weight:600}
+.c-str{color:#96382c}
+.c-num{color:#2f5f7d}
+.c-com{color:#8a7355;font-style:italic}
+.c-fn{color:#241a10;font-weight:600}
+.c-pkg{color:#2a5372}
+pre::-webkit-scrollbar{height:6px}
+pre::-webkit-scrollbar-track{background:transparent}
+pre::-webkit-scrollbar-thumb{background:rgba(122,95,60,.3);border-radius:0}
+pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
+
+.out{padding:20px 18px;--tilt:.9deg;margin-top:34px}
+.out__tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:0 0 10px}
+.out pre{font-size:13.5px;line-height:1.95;white-space:pre-wrap;overflow-wrap:anywhere;
+  font-family:var(--mono);color:#4a3423}
+.out pre b{color:var(--ink);font-weight:600}
+
+/* ── footer ──────────────────────────────────────────────── */
+.foot{padding:clamp(30px,5vh,52px) 0 clamp(46px,7vh,80px);display:flex;flex-wrap:wrap;
+  gap:24px 40px;align-items:flex-end;justify-content:space-between;position:relative}
+.foot__note{font-family:var(--hand);font-size:21px;color:#d9bd95;margin:0 0 6px}
+.foot__lic{font-family:var(--mono);font-size:11.5px;color:#a08360;letter-spacing:.04em;margin:0}
+.foot__links{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center}
+.foot__links a{font-family:var(--hand);font-size:19px;color:#d9bd95;text-decoration:none;
+  border-bottom:1px dashed rgba(217,189,149,.4)}
+.foot__links a:hover{color:#fff3dd;border-bottom-color:#fff3dd}
+.stamp{width:104px;height:104px;border-radius:50%;border:2px solid rgba(168,52,42,.5);
+  color:#c86a55;display:grid;place-items:center;text-align:center;transform:rotate(-12deg);
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;line-height:1.7;
+  box-shadow:inset 0 0 0 3px rgba(168,52,42,.1)}
+.stamp b{display:block;font-size:13px;letter-spacing:.08em;margin-bottom:1px}
+
+@media (width <= 940px){
+  :root{--bar:66px}
+  .hero{grid-template-columns:minmax(0,1fr);gap:14px}
+  .demo{order:-1;max-width:540px;margin:0 auto}
+  .code{grid-template-columns:minmax(0,1fr)}
+  .nav a{padding:5px 8px;font-size:19px}
+  .slip{font-size:16px;padding:7px 9px 8px}
+  .slip span{font-size:8.5px}
+  .tray{gap:6px}
+  .nav a span{display:none}
+  .facts li{flex-basis:100%}
+  .foot{align-items:flex-start}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important;transition-duration:.001ms !important}
+}
+</style>
+</head>
+<body>
+<div class="lamp" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="wrap">
+
+<header class="bar">
+  <a class="ticket" href="./index.html">
+    <svg class="ticket__mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M4 11.5 16 5l12 6.5v14L16 32 4 25.5z" fill="#e8cea0" stroke="#6b4a2f" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M4 11.5 16 18l12-6.5M16 18v13.6" stroke="#6b4a2f" stroke-width="1.7" fill="none" stroke-linejoin="round"/>
+    </svg>
+    <span class="ticket__name">moonkart</span>
+    <span class="ticket__no"><b>HANDLE WITH CARE</b>no. 001 / moonbit</span>
+  </a>
+  <nav class="nav" aria-label="Main">
+    <a href="./guide.html">Guide</a>
+    <a href="./api.html">API</a>
+    <a href="https://github.com/moonbitstack/moonkart">
+      <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      <span>GitHub</span>
+    </a>
+  </nav>
+</header>
+
+<main class="page">
+
+  <section class="hero">
+    <div class="board hero__board">
+      <p class="kicker">A cache for MoonBit</p>
+      <h1 class="title">moonkart
+        <svg viewBox="0 0 330 12" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M3 8.4c44-2.2 88-3 132-2 40 1 80 2.8 120 1.4 26-.8 52-2.2 72-3.6"/>
+          <path d="M26 10.8c36-1.4 72-2 108-1.4" opacity=".45"/>
+        </svg>
+      </h1>
+      <p class="lede">Put a value in. Ask for it later. When the box is full, it
+        gives one up so the new one fits.</p>
+      <div class="acts">
+        <a class="btn btn--ink" href="./guide.html">Start with a box</a>
+        <a class="btn btn--ghost" href="./api.html">Read the API</a>
+      </div>
+      <p class="scribble">a cache, not a cart
+        <svg class="doodle" width="34" height="30" viewBox="0 0 34 30" aria-hidden="true">
+          <path d="M22 2c2 10-1 17-8 22"/>
+          <path d="M8 18l6 7 6-7"/>
+        </svg>
+      </p>
+      <ul class="facts">
+        <li><b>3</b> eviction policies</li>
+        <li><b>TTL &middot; TTI</b> or your own rule</li>
+        <li><b>4</b> backends</li>
+      </ul>
+    </div>
+
+    <div class="demo">
+      <div class="stage" id="stage">
+        <!-- back of the box: interior and far wall -->
+        <svg class="layer-back" viewBox="96 82 328 328" aria-hidden="true">
+          <defs>
+            <pattern id="ribL" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+              <rect y="0" width="12" height="1.1" fill="rgba(90,58,28,.07)"/>
+              <rect y="6" width="12" height="1" fill="rgba(255,240,214,.06)"/>
+            </pattern>
+            <pattern id="ribR" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-28)">
+              <rect y="0" width="12" height="1.1" fill="rgba(90,58,28,.09)"/>
+              <rect y="6" width="12" height="1" fill="rgba(255,240,214,.05)"/>
+            </pattern>
+            <linearGradient id="in" x1=".2" y1="0" x2=".8" y2="1">
+              <stop offset="0" stop-color="#5c4128"/>
+              <stop offset=".55" stop-color="#3a2715"/>
+              <stop offset="1" stop-color="#1d1209"/>
+            </linearGradient>
+            <linearGradient id="faceL" x1=".1" y1="0" x2=".9" y2="1">
+              <stop offset="0" stop-color="#e7cba0"/>
+              <stop offset=".7" stop-color="#d3b184"/>
+              <stop offset="1" stop-color="#bb9464"/>
+            </linearGradient>
+            <linearGradient id="faceR" x1="0" y1="0" x2=".9" y2="1">
+              <stop offset="0" stop-color="#d3b184"/>
+              <stop offset="1" stop-color="#a97f4d"/>
+            </linearGradient>
+          </defs>
+          <path d="M260 96 410 176 260 256 110 176Z" fill="url(#in)"/>
+          <path d="M260 108 397 180 260 246 123 180Z" fill="#1a1008" opacity=".5"/>
+          <path d="M260 108 397 180 260 246 123 180Z" fill="none" stroke="rgba(233,205,158,.14)" stroke-width="2"/>
+        </svg>
+
+        <div class="layer-cards" id="cards" aria-live="polite"></div>
+
+        <!-- front of the box: two walls and the cut edge, which hides the cards' feet -->
+        <svg class="layer-front" viewBox="96 82 328 328" aria-hidden="true">
+          <path d="M110 176 260 256 260 396 110 316Z" fill="url(#faceL)" stroke="#6d4a29" stroke-width="2.1" stroke-linejoin="round"/>
+          <path d="M110 176 260 256 260 396 110 316Z" fill="url(#ribL)" stroke="none"/>
+          <path d="M260 256 410 176 410 316 260 396Z" fill="url(#faceR)" stroke="#6d4a29" stroke-width="2.1" stroke-linejoin="round"/>
+          <path d="M260 256 410 176 410 316 260 396Z" fill="url(#ribR)" stroke="none"/>
+
+          <!-- the mouth: a ring of corrugated cut edge -->
+          <path d="M260 96 410 176 260 256 110 176Z M260 103 403 176 260 249 117 176Z"
+                fill="url(#fluteEdge)" fill-rule="evenodd" stroke="#6d4a29" stroke-width="1.2" stroke-linejoin="round"/>
+
+          <path d="M260 256v140" stroke="#6d4a29" stroke-width="2.3"/>
+
+          <!-- packing tape over the seam -->
+          <g transform="rotate(-30 260 320)" opacity=".9">
+            <rect x="214" y="300" width="92" height="30" fill="rgba(232,210,166,.62)"
+                  stroke="rgba(255,255,255,.45)" stroke-width=".8"/>
+            <rect x="214" y="300" width="92" height="30" fill="none" stroke="rgba(109,74,41,.28)" stroke-width=".8"/>
+          </g>
+
+          <!-- hand-written mark on the front wall -->
+          <g transform="rotate(-29.7 330 320)">
+            <text x="272" y="322" font-family="'Caveat',cursive" font-weight="700" font-size="34"
+                  fill="#5a3d22" opacity=".72">moonkart</text>
+          </g>
+
+          <!-- shipping label -->
+          <g transform="translate(186 292) rotate(28)">
+            <rect x="-46" y="-27" width="92" height="54" rx="1.5" fill="#f6ead2" stroke="#8a6a44" stroke-width="1.1"/>
+            <text x="-37" y="-12" font-family="'JetBrains Mono',monospace" font-size="8" fill="#8a6a44" letter-spacing="1.2">MOONKART</text>
+            <text x="-37" y="6" font-family="'Caveat',cursive" font-weight="700" font-size="18" fill="#241a10">this side up</text>
+            <g fill="#3a2a1a">
+              <rect x="-37" y="12" width="2" height="10"/><rect x="-33" y="12" width="1" height="10"/>
+              <rect x="-30" y="12" width="2.5" height="10"/><rect x="-26" y="12" width="1" height="10"/>
+              <rect x="-23" y="12" width="2" height="10"/><rect x="-19" y="12" width="1" height="10"/>
+              <rect x="-16" y="12" width="2.5" height="10"/><rect x="-11" y="12" width="1" height="10"/>
+              <rect x="-8" y="12" width="2" height="10"/><rect x="-4" y="12" width="1" height="10"/>
+              <rect x="-1" y="12" width="2" height="10"/><rect x="3" y="12" width="2.5" height="10"/>
+              <rect x="8" y="12" width="1" height="10"/><rect x="11" y="12" width="2" height="10"/>
+              <rect x="15" y="12" width="1" height="10"/><rect x="18" y="12" width="2.5" height="10"/>
+              <rect x="23" y="12" width="1" height="10"/><rect x="26" y="12" width="2" height="10"/>
+              <rect x="30" y="12" width="1" height="10"/><rect x="33" y="12" width="2" height="10"/>
+            </g>
+          </g>
+        </svg>
+
+        <div class="readout" id="readout">
+          <p class="tally">the counter</p>
+          <dl>
+            <dt>hits</dt><dd id="s-hit">0</dd>
+            <dt>misses</dt><dd id="s-miss">0</dd>
+            <dt>evictions</dt><dd id="s-evict">0</dd>
+            <dt>in the box</dt><dd id="s-size">0 / 2</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="tray" id="tray">
+        <button class="slip" type="button" data-k="user:42" data-v="Ada">Ada <span>user:42</span></button>
+        <button class="slip" type="button" data-k="user:7" data-v="Grace">Grace <span>user:7</span></button>
+        <button class="slip" type="button" data-k="user:99" data-v="Linus">Linus <span>user:99</span></button>
+        <button class="slip" type="button" data-k="user:3" data-v="Edsger">Edsger <span>user:3</span></button>
+        <button class="slip" type="button" data-k="user:11" data-v="Barbara">Barbara <span>user:11</span></button>
+      </div>
+      <p class="tray__hint" id="hint">Put one in, then click a card in the box to ask for it again.</p>
+    </div>
+  </section>
+
+  <section class="specs">
+    <article class="board spec">
+      <span class="spec__n">01 / CAPACITY</span>
+      <h2 class="spec__h">Bounded</h2>
+      <p class="spec__p">Cap by entry count with <code>cap</code>, or by total size with
+        <code>max_weight</code> and a <code>weigher</code> when values differ.</p>
+    </article>
+    <article class="board spec">
+      <span class="spec__n">02 / TIME</span>
+      <h2 class="spec__h">Expires</h2>
+      <p class="spec__p">Time to live, time to idle, or a rule of your own, per entry.
+        The clock is a parameter, so a test moves a number instead of sleeping.</p>
+    </article>
+    <article class="board spec">
+      <span class="spec__n">03 / LOADING</span>
+      <h2 class="spec__h">Loads once</h2>
+      <p class="spec__p">Readers of the same missing key wait for one loader and share
+        its answer. If it raises, every reader gets that error and nothing is stored.</p>
+    </article>
+    <article class="board spec">
+      <span class="spec__n">04 / POLICY</span>
+      <h2 class="spec__h">Swappable</h2>
+      <p class="spec__p">W-TinyLFU by default, LRU and S3-FIFO when you want them, and
+        your own behind the same contract. The cache type never changes.</p>
+    </article>
+  </section>
+
+  <section class="code">
+    <div class="board code__board">
+      <p class="label__tag" style="color:#6d4a29">THE SAME THREE CALLS, ON A BOX THAT HOLDS TWO</p>
+      <div class="label">
+<pre><code><span class="c-key">let</span> cache = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">2L</span>)
+cache.<span class="c-fn">set</span>(<span class="c-str">"a"</span>, <span class="c-num">1</span>)
+cache.<span class="c-fn">set</span>(<span class="c-str">"b"</span>, <span class="c-num">2</span>)
+cache.<span class="c-fn">get</span>(<span class="c-str">"a"</span>)      <span class="c-com">// "a" is now the most recent</span>
+cache.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span class="c-num">3</span>)   <span class="c-com">// full: "b" leaves</span></code></pre>
+      </div>
+    </div>
+    <div class="board out">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>a is present: <b>true</b>
+read a: <b>1</b>
+b survives: <b>false</b>
+c is present: <b>true</b>
+hits: <b>1</b>, misses: <b>0</b>
+evictions: <b>1</b></pre>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div>
+      <p class="foot__note">Made of cardboard, and MoonBit.</p>
+      <p class="foot__lic">Apache 2.0</p>
+    </div>
+    <nav class="foot__links" aria-label="Elsewhere">
+      <a href="./guide.html">Guide</a>
+      <a href="./api.html">API</a>
+      <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
+      <a href="https://mooncakes.io/docs/moonbitstack/moonkart">mooncakes</a>
+    </nav>
+    <div class="stamp" aria-hidden="true"><span><b>PACKED</b>IN MOONBIT</span></div>
+  </footer>
+
+</main>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="fluteEdge" width="7" height="7" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="#9a7043"/>
+      <path d="M0 5.2 Q1.75 1.6 3.5 5.2 T7 5.2" fill="none" stroke="#75512c" stroke-width=".8"/>
+      <rect width="7" height="1.1" fill="#c39a68"/>
+      <rect y="5.9" width="7" height="1.1" fill="#8a6136"/>
+    </pattern>
+  </defs>
+</svg>
+
+<script type="module">
+const SLOTS = [
+  { left: "17%", top: "26%", rot: -4 },
+  { left: "57%", top: "26%", rot: 4 },
+];
+const CAP = 2;
+const desk = [];
+
+const root = document.documentElement;
+/* one time in five the name is written with a fat marker instead; #hand and
+   #shout pin it either way so both can be looked at on purpose */
+const forced = location.hash.slice(1);
+if (forced === "shout" || (forced !== "hand" && Math.random() < 0.2)) {
+  root.classList.add("shout");
+}
+/* the scrollbar hides while the page sits at the top */
+const markTop = () => root.classList.toggle("at-top", scrollY === 0);
+addEventListener("scroll", markTop, { passive: true });
+markTop();
+
+const cardsEl = document.getElementById("cards");
+const trayEl = document.getElementById("tray");
+const hintEl = document.getElementById("hint");
+const box = {
+  hit: document.getElementById("s-hit"),
+  miss: document.getElementById("s-miss"),
+  evict: document.getElementById("s-evict"),
+  size: document.getElementById("s-size"),
+};
+
+let engine = null;
+try {
+  engine = await import("./engine/cache.js");
+  engine.mk_reset(CAP);
+} catch (err) {
+  console.warn("the compiled cache is not reachable here:", err);
+}
+
+const live = [];
+
+function paint() {
+  if (!engine) return;
+  const [h, m, e, n] = engine.mk_stats().split("\t");
+  box.hit.textContent = h;
+  box.miss.textContent = m;
+  box.evict.textContent = e;
+  box.size.textContent = `${n} / ${CAP}`;
+}
+
+function card(key, value, extra) {
+  const el = document.createElement("div");
+  el.className = "slot" + (extra ? " " + extra : "");
+  el.innerHTML = '<div class="cardface"><span class="k"></span><span class="v"></span></div>';
+  el.querySelector(".k").textContent = key;
+  el.querySelector(".v").textContent = value;
+  return el;
+}
+
+function seat(i) {
+  const s = SLOTS[i] || SLOTS[SLOTS.length - 1];
+  const el = live[i].el;
+  el.style.left = s.left;
+  el.style.top = s.top;
+  el.style.transform = `rotate(${s.rot}deg)`;
+}
+
+function flash(el) {
+  el.classList.remove("hit");
+  void el.offsetWidth;
+  el.classList.add("hit");
+  setTimeout(() => el.classList.remove("hit"), 600);
+}
+
+function put(key, value) {
+  if (!engine) return;
+  engine.mk_set(key, value);
+  const at = live.findIndex((c) => c.key === key);
+  if (at >= 0) {
+    flash(live[at].el);
+    hintEl.textContent = `${key} was already in the box, so the new value replaced it.`;
+    paint();
+    return;
+  }
+  if (live.length === CAP) {
+    const gone = live.shift();
+    gone.el.classList.add("leaving");
+    setTimeout(() => {
+      gone.el.className = "slot gone";
+      gone.el.style.transform = "rotate(-9deg)";
+      gone.el.style.left = "";
+      gone.el.style.top = "";
+      gone.el.addEventListener("click", () => miss(gone.el), { once: false });
+      cardsEl.appendChild(gone.el);
+      desk.push(gone.el);
+      while (desk.length > 3) desk.shift().remove();
+      desk.forEach((el, i) => {
+        el.style.left = `${1 + i * 9}%`;
+        el.style.bottom = `${8 + i * 2}%`;
+      });
+    }, 540);
+  }
+  const el = card(key, value);
+  el.addEventListener("click", () => ask(key, el));
+  cardsEl.appendChild(el);
+  live.push({ key, value, el });
+  live.forEach((_, i) => seat(i));
+  hintEl.textContent = `${value} is in the box as ${key}.`;
+  paint();
+}
+
+function ask(key, el) {
+  if (!engine) return;
+  const [state] = engine.mk_get(key).split("\t");
+  if (state === "hit") {
+    flash(el);
+    hintEl.textContent = `${key}: a hit. Nothing had to be computed.`;
+  } else {
+    hintEl.textContent = `${key}: a miss.`;
+  }
+  paint();
+}
+
+function miss(el) {
+  if (!engine) return;
+  const key = el.querySelector(".k").textContent;
+  engine.mk_get(key);
+  el.classList.remove("miss");
+  void el.offsetWidth;
+  el.classList.add("miss");
+  hintEl.textContent = `${key} was pushed out. Asking again is a miss.`;
+  paint();
+}
+
+trayEl.addEventListener("click", (e) => {
+  const b = e.target.closest(".slip");
+  if (!b) return;
+  put(b.dataset.k, b.dataset.v);
+});
+
+/* two cards already in the box, so the page does not open on an empty stage */
+if (engine) {
+  put("user:42", "Ada");
+  put("user:7", "Grace");
+  paint();
+} else {
+  hintEl.textContent = "Opened from a file, the live cache cannot load. Serve the folder over HTTP to try it.";
+  ["user:42|Ada", "user:7|Grace"].forEach((pair, i) => {
+    const [k, v] = pair.split("|");
+    const el = card(k, v);
+    cardsEl.appendChild(el);
+    live.push({ key: k, value: v, el });
+    seat(i);
+  });
+}
+</script>
+</body>
+</html>
