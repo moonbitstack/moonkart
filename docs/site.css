@@ -48,6 +48,15 @@
 html,body{margin:0;padding:0}
 html{background:var(--desk);color:var(--ink)}
 html,button,input,textarea,select{font-variant-ligatures:no-contextual}
+/* a selection should look like a highlighter on kraft, not a blue box */
+::selection{background:rgba(168,52,42,.22);color:var(--ink)}
+/* Decorative print — the marks, the tags, the counter, the note on the box — is
+   part of the material. Selecting it drags blue boxes across the drawing, so it
+   is not selectable. Prose and code still are. */
+.kicker,.scribble,.marks,.readout,.ticket__no,.stamp,
+.label__tag,.out__tag,.spec__n,.chapter__eyebrow,.col__tag,.tally,
+.tray__hint,.inside__hint,.tally-line,.stage,.chips,
+.stamp *,.readout *{-webkit-user-select:none;user-select:none}
 body{
   font-family:var(--body);
   font-size:19px;
@@ -278,6 +287,7 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
 .stage:has(.openlid:hover) .lidwrap{filter:brightness(1.035)}
 /* once the box is open the lid is gone; the near flap stays, hanging on the wall */
 html[data-lid="open"] .lidwrap>[data-flap="far"],
+html[data-lid="open"] .lidwrap>[data-flap="near"],
 html[data-lid="open"] .lid__seam,
 html[data-lid="open"] .lid__tape,
 html[data-lid="open"] .lid__note,
@@ -296,7 +306,7 @@ html[data-lid="open"] .openlid{display:none}
   background:linear-gradient(172deg,#fdf4e2,#efe0c2);
   border:1px solid #c1a37a;border-radius:1px;
   padding:8px 9px 6px;height:100%;
-  box-shadow:0 1px 0 rgba(150,118,76,.28), 0 6px 10px -8px rgba(0,0,0,.65);
+  box-shadow:0 .8px 0 rgba(150,118,76,.28), 0 6px 10px -8px rgba(0,0,0,.65);
   animation:drop .42s cubic-bezier(.2,1.2,.4,1) both;
 }
 .cardface .k{display:block;font-family:var(--mono);font-size:8.5px;color:#8a6d47;
@@ -322,15 +332,15 @@ html[data-lid="open"] .openlid{display:none}
 @keyframes drop{from{opacity:0;transform:translateY(-26px) scale(.94)}to{opacity:1;transform:none}}
 @keyframes eject{to{opacity:0;transform:translate(34px,26px) rotate(16deg) scale(.9)}}
 @keyframes hit{
-  0%{box-shadow:0 0 0 0 rgba(168,52,42,.55),0 1px 0 rgba(150,118,76,.28)}
-  60%{box-shadow:0 0 0 7px rgba(168,52,42,0),0 1px 0 rgba(150,118,76,.28)}
-  100%{box-shadow:0 1px 0 rgba(150,118,76,.28),0 6px 10px -8px rgba(0,0,0,.65)}
+  0%{box-shadow:0 0 0 0 rgba(168,52,42,.55),0 .8px 0 rgba(150,118,76,.28)}
+  60%{box-shadow:0 0 0 7px rgba(168,52,42,0),0 .8px 0 rgba(150,118,76,.28)}
+  100%{box-shadow:0 .8px 0 rgba(150,118,76,.28),0 6px 10px -8px rgba(0,0,0,.65)}
 }
 
 .readout{position:absolute;right:1.5%;bottom:2.5%;width:26%;min-width:134px;
   background:linear-gradient(174deg,#f2de92,#e4c969);
   padding:10px 12px 12px;transform:rotate(2.2deg);
-  box-shadow:0 1px 0 rgba(160,130,60,.5),0 12px 18px -14px rgba(0,0,0,.9);
+  box-shadow:0 .8px 0 rgba(160,130,60,.5),0 12px 18px -14px rgba(0,0,0,.9);
   font-family:var(--mono);font-size:10px;color:#4a3a1c;z-index:4}
 .readout::before{content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%) rotate(-2deg);
   width:52px;height:15px;background:rgba(250,242,220,.62);
@@ -346,7 +356,7 @@ html[data-lid="open"] .openlid{display:none}
   font-family:var(--hand);font-weight:700;font-size:18px;line-height:1;
   color:#241a10;background:linear-gradient(172deg,#fbf1de,#e9d9ba);
   border:1px solid #c1a37a;border-radius:1px;padding:8px 11px 9px;cursor:pointer;
-  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 1px 0 rgba(150,118,76,.35);
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 .8px 0 rgba(150,118,76,.35);
   transition:transform .14s,box-shadow .14s,opacity .2s;
   display:inline-flex;align-items:baseline;gap:6px;
 }
@@ -596,10 +606,10 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 .pocket:first-child::before{display:none}
 .pslip{font-family:var(--neat);font-weight:400;font-size:17px;line-height:1;color:#241a10;
   background:linear-gradient(172deg,#fdf4e2,#eeddbd);border:1px solid #c1a37a;border-radius:1px;
-  padding:12px 9px 13px;min-width:64px;text-align:center;transform:rotate(-2deg);box-shadow:0 1px 0 rgba(20,12,4,.45),0 6px 10px -8px rgba(0,0,0,.9);
+  padding:12px 9px 13px;min-width:64px;text-align:center;transform:rotate(-2deg);box-shadow:0 .8px 0 rgba(20,12,4,.45),0 6px 10px -8px rgba(0,0,0,.9);
   animation:dip .32s cubic-bezier(.2,1.1,.4,1) both;max-width:100%;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
-.pocket.is-hot .pslip{background:linear-gradient(172deg,#fff8e8,#f4e5c4);box-shadow:0 1px 0 rgba(20,12,4,.45),0 0 0 2px rgba(168,52,42,.35)}
+.pocket.is-hot .pslip{background:linear-gradient(172deg,#fff8e8,#f4e5c4);box-shadow:0 .8px 0 rgba(20,12,4,.45),0 0 0 2px rgba(168,52,42,.35)}
 @keyframes dip{from{transform:translateY(-14px) rotate(-2deg);opacity:0}to{transform:translateY(0) rotate(-2deg);opacity:1}}
 
 .deskrow{display:flex;gap:6px;margin-top:10px;min-height:34px;align-items:flex-start}

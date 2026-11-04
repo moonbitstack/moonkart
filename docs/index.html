@@ -209,15 +209,13 @@
                that folds away behind the rim; `near` is the short one that swings
                down the right wall. Both keep the slope of the edge they hang from. -->
           <g class="lidwrap">
-            <g data-flap="far">
+            <g data-flap="far" clip-path="url(#mouthClip)">
               <polygon points="110 176 260 96 348.2 143.1 198.2 223.1"
                        fill="url(#lidFar)" stroke="#6d4a29" stroke-width="1.6" stroke-linejoin="round"/>
               <polygon points="110 176 260 96 348.2 143.1 198.2 223.1" fill="url(#ribL)" opacity=".8"/>
             </g>
-            <g data-flap="near">
-              <!-- the shadow it throws on the wall and its own cut edge: both sit
-                   outside the flap, so the closed lid hides them on its own -->
-              <path class="flap__cast" fill="url(#flapCast)"/>
+            <g data-flap="near" clip-path="url(#mouthClip)">
+              <!-- its own cut edge, which shows while the flap is still coming over -->
               <path class="flap__edge" fill="url(#fluteEdge)" stroke="rgba(96,62,28,.5)" stroke-width=".6"/>
               <g class="flap__body">
                 <polygon points="260 256 410 176 348.2 143.1 198.2 223.1"
@@ -229,11 +227,12 @@
               <path d="M198.2 223.1 348.2 143.1" stroke="rgba(70,44,18,.42)" stroke-width="1.2"/>
               <path d="M199.6 222 349.6 142" stroke="rgba(255,248,230,.22)" stroke-width="1"/>
             </g>
+            <!-- the tape is split along the seam: each half stays stuck to its flap -->
             <g class="lid__tape">
-              <polygon points="199.1 229.2 359.7 143.6 347.3 137 186.7 222.6"
-                       fill="rgba(255,250,238,.2)"/>
-              <path d="M199.1 229.2 359.7 143.6" stroke="rgba(255,255,255,.52)" stroke-width="1"/>
-              <path d="M186.7 222.6 347.3 137" stroke="rgba(64,40,16,.17)" stroke-width="1"/>
+              <polygon class="tape" data-tape="near" points="353.5 140.2 192.9 225.9 186.8 222.6 347.3 137"
+                       fill="rgba(255,250,238,.26)"/>
+              <polygon class="tape" data-tape="far" points="359.7 143.5 199.1 229.2 192.9 225.9 353.5 140.2"
+                       clip-path="url(#mouthClip)" fill="rgba(255,250,238,.26)"/>
             </g>
             <!-- written on the lid, so it takes the lid's own two axes: along the
                  seam, and away towards the back of the box -->
@@ -341,11 +340,16 @@ evictions: <b>1</b></pre>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <pattern id="fluteEdge" width="7" height="7" patternUnits="userSpaceOnUse">
-      <rect width="7" height="7" fill="#9a7043"/>
-      <path d="M0 5.2 Q1.75 1.6 3.5 5.2 T7 5.2" fill="none" stroke="#75512c" stroke-width=".8"/>
-      <rect width="7" height="1.1" fill="#c39a68"/>
-      <rect y="5.9" width="7" height="1.1" fill="#8a6136"/>
+      <rect width="7" height="7" fill="#8d6740"/>
+      <path d="M0 5.2 Q1.75 1.6 3.5 5.2 T7 5.2" fill="none" stroke="#63472a" stroke-width=".8"/>
+      <rect width="7" height="1.1" fill="#a87e50"/>
+      <rect y="5.9" width="7" height="1.1" fill="#73512e"/>
     </pattern>
+    <!-- The far flap is inside the box. Clipped to the mouth, it slides out of
+         sight behind the front rim as it folds, exactly as it would in a photo. -->
+    <clipPath id="mouthClip">
+      <path d="M260 92 414 176 260 260 106 176Z"/>
+    </clipPath>
   </defs>
 </svg>
 
@@ -514,46 +518,95 @@ const tapeEl = lidWrap.querySelector(".lid__tape");
 const seamEl = lidWrap.querySelector(".lid__seam");
 const noteEl = lidWrap.querySelector(".lid__note");
 
-const SEALED = {
-  near: [[260, 256], [410, 176], [348.2, 143.1], [310.7, 163.1], [273.2, 183.1],
-         [235.7, 203.1], [198.2, 223.1]],
-  far: [[110, 176], [260, 96], [348.2, 143.1], [198.2, 223.1]],
+/* The lid is one plane; each flap is half of it, hinged along one edge. Every
+   point on a flap is written as (s, t) — s along the hinge, t into the flap —
+   and turning the flap by φ about that hinge sends t to
+       t·cosφ still lying in the lid, t·sinφ straight down,
+   which is how a real flap falls. The free edge travels an arc, not a chord, and
+   the flap foreshortens as it turns. Both end positions come out identical to
+   the drawn lid, so only the path between them changes. */
+const NEAR = { H: [410, 176], u: [-0.8824, 0.4706], v: [-0.8824, -0.4706] };
+const FAR = { H: [110, 176], u: [0.8824, -0.4706], v: [0.8824, 0.4706] };
+const NEAR_CORNERS = [[170, 0], [0, 0], [0, 70], [170, 70]];
+const FAR_CORNERS = [[0, 0], [170, 0], [170, 100], [0, 100]];
+
+const project = (f, s, t, phi) => {
+  const c = Math.cos(phi);
+  const n = Math.sin(phi);
+  return [
+    f.H[0] + s * f.u[0] + t * f.v[0] * c,
+    f.H[1] + s * f.u[1] + t * f.v[1] * c + t * n,
+  ];
 };
-/* the free edge bows when it hangs: a stiff flap never lies dead flat on the wall */
-const OPENED = {
-  near: [[260, 256], [410, 176], [410, 246], [372.5, 269], [335, 292],
-         [297.5, 309], [260, 326]],
-  far: [[110, 176], [260, 96], [309.2, 69.8], [159.1, 149.8]],
+const toLocal = (f, p) => {
+  const dx = p[0] - f.H[0];
+  const dy = p[1] - f.H[1];
+  const det = f.u[0] * f.v[1] - f.u[1] * f.v[0];
+  return [(dx * f.v[1] - f.v[0] * dy) / det, (f.u[0] * dy - f.u[1] * dx) / det];
 };
 
-const writeShape = (g, pts) => {
-  const s = pts.map((p) => p[0].toFixed(2) + " " + p[1].toFixed(2)).join(" ");
+const asPoints = (pts) =>
+  pts.map((p) => p[0].toFixed(2) + " " + p[1].toFixed(2)).join(" ");
+
+function setFlap(g, pts) {
+  const s = asPoints(pts);
   for (const pg of g.querySelectorAll("polygon")) pg.setAttribute("points", s);
-  /* the cut edge of the flap and the shadow it lays on the wall travel with it,
-     and both follow the bow of the free edge */
-  const edge = pts.slice(2);
+
+  /* the flap's cut edge and the shadow it lays on the wall, both hanging from
+     the free edge (corners 2 and 3) */
+  const [a, b] = [pts[2], pts[3]];
   const band = (h) => {
-    const top = edge.map((p) => p[0].toFixed(2) + " " + p[1].toFixed(2));
-    const back = edge.slice().reverse().map((p) => p[0].toFixed(2) + " " + (p[1] + h).toFixed(2));
-    return "M" + top.join("L") + "L" + back.join("L") + "Z";
+    const f = (p) => p[0].toFixed(2) + " " + p[1].toFixed(2);
+    return `M${f(a)}L${f(b)}L${b[0].toFixed(2)} ${(b[1] + h).toFixed(2)}` +
+      `L${a[0].toFixed(2)} ${(a[1] + h).toFixed(2)}Z`;
   };
-  const cast = g.querySelector(".flap__cast");
-  if (cast) cast.setAttribute("d", band(21));
   const cut = g.querySelector(".flap__edge");
   if (cut) cut.setAttribute("d", band(4.5));
-};
-const mix = (a, b, t) => a + (b - a) * t;
-const blend = (from, to, t) =>
-  from.map((p, i) => [mix(p[0], to[i][0], t), mix(p[1], to[i][1], t)]);
+  const cast = g.querySelector(".flap__cast");
+  if (cast) cast.setAttribute("d", band(22));
+}
+
+/* the tape, split down the seam so each half rides its own flap */
+const tapeNear = lidWrap.querySelector('[data-tape="near"]');
+const tapeFar = lidWrap.querySelector('[data-tape="far"]');
+const TAPE_NEAR = [[-6, 70], [176, 70], [176, 77], [-6, 77]];
+const TAPE_FAR = [[-6, 63], [176, 63], [176, 70], [-6, 70]]
+  .map(([s, t]) => toLocal(FAR, project(NEAR, s, t, 0)));
+
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
-/* a hinged flap swings fast, overshoots a little and settles on the wall */
-const swingEase = (t) => 1 - Math.pow(1 - t, 3) * Math.cos(t * 4.2);
+/* A flap let go of the tape turns under its own weight: it gathers speed, then
+   lands on the wall and rocks back a couple of degrees. */
+const swingEase = (k) => {
+  const v = 1 - Math.pow(1 - k, 2.2);
+  const rock = k > 0.84 ? -0.05 * Math.sin(((k - 0.84) / 0.16) * Math.PI) : 0;
+  return v + rock;
+};
+const HALF_PI = Math.PI / 2;
+
+function drawLid(phiNear, phiFar) {
+  setFlap(flapNear, NEAR_CORNERS.map(([s, t]) => project(NEAR, s, t, phiNear)));
+  setFlap(flapFar, FAR_CORNERS.map(([s, t]) => project(FAR, s, t, phiFar)));
+  tapeNear.setAttribute("points", asPoints(TAPE_NEAR.map(([s, t]) => project(NEAR, s, t, phiNear))));
+  tapeFar.setAttribute("points", asPoints(TAPE_FAR.map(([s, t]) => project(FAR, s, t, phiFar))));
+
+  /* the flap turns into the box, where no light reaches it: it goes under with
+     the dark, which is why the eye reads it as sinking and not as a sheet */
+  const shade = 1.06 - 0.44 * Math.sin(phiNear);
+  flapNear.querySelector(".flap__body").style.filter = `brightness(${shade.toFixed(3)})`;
+  const farShade = 1.02 - 0.46 * Math.sin(phiFar);
+  flapFar.style.filter = `brightness(${farShade.toFixed(3)})`;
+  /* the last few degrees go into the dark of the box, where nothing is lit */
+  const into = (phi) => 1 - Math.min(1, Math.max(0, (phi / HALF_PI - 0.7) / 0.3));
+  flapNear.style.opacity = String(into(phiNear));
+  flapFar.style.opacity = String(into(phiFar));
+}
 
 const lidOpen = () => root.dataset.lid === "open";
 
 if (lidOpen()) {
-  writeShape(flapNear, OPENED.near);
+  drawLid(HALF_PI, HALF_PI);
 } else {
+  drawLid(0, 0);
   trayEl.classList.add("is-locked");
   if (engine) hintEl.textContent = "The box is taped shut. Click it to open.";
 }
@@ -577,7 +630,7 @@ function openLid() {
 
   /* the box still opens, it just does not perform */
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    writeShape(flapNear, OPENED.near);
+    drawLid(HALF_PI, HALF_PI);
     root.dataset.lid = "open";
     dropCards();
     hintEl.textContent = "Click a card in the box to ask for it again.";
@@ -586,31 +639,31 @@ function openLid() {
   }
 
   const t0 = performance.now();
-  const DUR = 1050;
+  const DUR = 820;
   let dropped = false;
   const span = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
 
   const step = () => {
     const t = Math.min(1, (performance.now() - t0) / DUR);
-    /* the seal goes first, in one tear, and the note with it */
-    tapeEl.style.opacity = String(1 - span(t, 0, 0.14));
-    noteEl.style.opacity = String(1 - span(t, 0, 0.09));
-    seamEl.style.opacity = String(1 - span(t, 0.05, 0.3));
-    /* the near flap swings down the right wall and settles */
-    writeShape(flapNear, blend(SEALED.near, OPENED.near, swingEase(span(t, 0.08, 0.94))));
-    /* the far one folds away behind the rim before you can watch it */
-    writeShape(flapFar, blend(SEALED.far, OPENED.far, easeOut(span(t, 0.08, 0.95))));
-    flapFar.style.opacity = String(1 - span(t, 0.25, 0.78));
 
-    if (!dropped && t > 0.46) {
+    /* the seal tears first: the note goes with it, the seam splits */
+    noteEl.style.opacity = String(1 - span(t, 0, 0.1));
+    seamEl.style.opacity = String(1 - span(t, 0.04, 0.26));
+
+    /* near flap: turns down the right wall, rocks back, settles */
+    const phiNear = HALF_PI * swingEase(span(t, 0.06, 0.58));
+    /* far flap: it is inside the box, so the rim takes it as it goes over */
+    const phiFar = HALF_PI * swingEase(span(t, 0.08, 0.54));
+    drawLid(phiNear, phiFar);
+
+    if (!dropped && t > 0.44) {
       dropped = true;
       dropCards();
       hintEl.textContent = "Click a card in the box to ask for it again.";
     }
     if (t < 1) return requestAnimationFrame(step);
 
-    writeShape(flapNear, OPENED.near);
-    flapFar.style.opacity = "0";
+    drawLid(HALF_PI, HALF_PI);
     root.dataset.lid = "open";
     cutting = false;
   };
