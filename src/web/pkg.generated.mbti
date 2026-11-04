@@ -4,11 +4,15 @@ package "moonbitstack/moonkart/web"
 // Values
 pub fn mk_get(String) -> String
 
+pub fn mk_replay(String, Int32, String) -> String
+
 pub fn mk_reset(Int32) -> Unit
 
 pub fn mk_set(String, String) -> String
 
 pub fn mk_stats() -> String
+
+pub fn mk_survey(Int32, String, String) -> String
 
 // Errors
 
