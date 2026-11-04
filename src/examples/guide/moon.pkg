@@ -1,0 +1,6 @@
+import {
+  "moonbitstack/moonkart",
+  "moonbitlang/core/ref",
+}
+
+pkgtype(kind: "executable")

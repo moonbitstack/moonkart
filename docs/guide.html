@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en" class="at-top">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide — moonkart</title>
+<meta name="description" content="A short guide to moonkart: putting values in, bounding the box, expiry, loaders, and reading the counters.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23c9a678'/%3E%3Cpath d='M5 12 16 6l11 6v14l-11 6-11-6z' fill='%23e0c69e' stroke='%236b4a2f' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M5 12l11 6 11-6M16 18v14' stroke='%236b4a2f' stroke-width='1.6' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@300;400;700&family=Permanent+Marker&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./site.css">
+</head>
+<body>
+<div class="lamp" aria-hidden="true"></div>
+<div class="walls" aria-hidden="true"><i></i><i></i></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="shell doc">
+
+<header class="bar panel">
+  <a class="ticket" href="./index.html">
+    <svg class="ticket__mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M4 11.5 16 5l12 6.5v14L16 32 4 25.5z" fill="#e8cea0" stroke="#6b4a2f" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M4 11.5 16 18l12-6.5M16 18v13.6" stroke="#6b4a2f" stroke-width="1.7" fill="none" stroke-linejoin="round"/>
+    </svg>
+    <span class="ticket__name">moonkart</span>
+    <span class="ticket__no"><b>GUIDE</b>six short steps</span>
+  </a>
+  <nav class="nav" aria-label="Main">
+    <a href="./index.html">Home</a>
+    <a href="./api.html">API</a>
+    <a href="https://github.com/moonbitstack/moonkart">
+      <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      <span>GitHub</span>
+    </a>
+  </nav>
+</header>
+
+<aside class="toc panel">
+  <h2>Six steps</h2>
+  <ol>
+    <li><a href="#put">Put something in</a></li>
+    <li><a href="#bound">Bound the box</a></li>
+    <li><a href="#expire">Let it expire</a></li>
+    <li><a href="#load">Load it once</a></li>
+    <li><a href="#fail">When a load fails</a></li>
+    <li><a href="#count">Read the counters</a></li>
+  </ol>
+</aside>
+
+<main class="doc__body">
+
+  <section class="chapter panel" id="put">
+    <span class="chapter__eyebrow">01 / PUT</span>
+    <h2>Put something in</h2>
+    <p>A cache is built by a constructor, not by a type. Choose the policy in the name:
+      <code>tinylfu_cache</code>, <code>lru_cache</code> or <code>s3fifo_cache</code>. They all
+      return the same <code>Cache[K, V]</code>, so the rest of your code never mentions which
+      one you picked.</p>
+    <div class="label">
+<pre><code><span class="c-key">let</span> cache = <span class="c-pkg">@moonkart</span>.<span class="c-fn">tinylfu_cache</span>(cap=<span class="c-num">1000</span>)
+cache.<span class="c-fn">set</span>(<span class="c-str">"user:42"</span>, <span class="c-str">"Ada"</span>)
+<span class="c-key">match</span> cache.<span class="c-fn">get</span>(<span class="c-str">"user:42"</span>) {
+  Some(name) =&gt; <span class="c-fn">println</span>(<span class="c-str">"read user:42 -&gt; \{name}"</span>)
+  None =&gt; <span class="c-fn">println</span>(<span class="c-str">"read user:42 -&gt; nothing"</span>)
+}</code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>read user:42 -&gt; <b>Ada</b></pre>
+    </div>
+  </section>
+
+  <section class="chapter panel" id="bound">
+    <span class="chapter__eyebrow">02 / BOUND</span>
+    <h2>Bound the box</h2>
+    <p>By default the cache holds <code>cap</code> entries. When the values are not all the same
+      size, give a <code>weigher</code> and a <code>max_weight</code> instead; the cache keeps the
+      total weight under the limit and evicts by the same policy.</p>
+    <div class="label">
+<pre><code><span class="c-key">let</span> by_weight = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(
+  max_weight=<span class="c-num">12L</span>,
+  weigher=<span class="c-key">fn</span>(_k : String, v : String) { Int64::<span class="c-fn">from_int</span>(v.<span class="c-fn">length</span>()) },
+)
+by_weight.<span class="c-fn">set</span>(<span class="c-str">"a"</span>, <span class="c-str">"three"</span>)   <span class="c-com">// 5</span>
+by_weight.<span class="c-fn">set</span>(<span class="c-str">"b"</span>, <span class="c-str">"four"</span>)    <span class="c-com">// 5 + 4 = 9</span>
+by_weight.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span class="c-str">"five"</span>)    <span class="c-com">// 14 &gt; 12, so "a" leaves</span></code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>a=<b>false</b> b=<b>true</b> c=<b>true</b></pre>
+    </div>
+  </section>
+
+  <section class="chapter panel" id="expire">
+    <span class="chapter__eyebrow">03 / EXPIRE</span>
+    <h2>Let it expire</h2>
+    <p><code>ttl</code> counts from the moment an entry is written; <code>tti</code> counts from
+      its last read. For anything else — a deadline that depends on the value, or one that only
+      some entries get — pass an <code>Expiry</code> with your own callbacks.</p>
+    <p>The clock is a parameter. Nothing in the library reads the wall clock, so a test moves a
+      number instead of sleeping.</p>
+    <div class="label">
+<pre><code><span class="c-key">let</span> now : <span class="c-pkg">@ref</span>.Ref[Int64] = <span class="c-pkg">@ref</span>.Ref(<span class="c-num">0L</span>)
+<span class="c-key">let</span> timed = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(
+  cap=<span class="c-num">8L</span>,
+  expiry=<span class="c-pkg">@moonkart</span>.<span class="c-fn">ttl</span>(<span class="c-num">10L</span>),
+  clock=<span class="c-key">fn</span>() { now.val },
+)
+timed.<span class="c-fn">set</span>(<span class="c-str">"k"</span>, <span class="c-str">"v"</span>)
+<span class="c-fn">println</span>(<span class="c-str">"at t=0:  \{timed.contains("k")}"</span>)
+now.val = <span class="c-num">11L</span>
+<span class="c-fn">println</span>(<span class="c-str">"at t=11: \{timed.contains("k")}"</span>)</code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>at t=0:  <b>true</b>
+at t=11: <b>false</b></pre>
+    </div>
+  </section>
+
+  <section class="chapter panel" id="load">
+    <span class="chapter__eyebrow">04 / LOAD</span>
+    <h2>Load it once</h2>
+    <p><code>get_with</code> runs the loader only on a miss and stores what it returns. Ask twice
+      for the same key and the second call is a plain hit — the loader does not run again.</p>
+    <p>The loader may raise. Wrap one that cannot fail with <code>infallible_loader</code> and the
+      call site needs no error handling.</p>
+    <div class="label">
+<pre><code><span class="c-key">let</span> loaded = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">8L</span>)
+<span class="c-key">let</span> calls : <span class="c-pkg">@ref</span>.Ref[Int] = <span class="c-pkg">@ref</span>.Ref(<span class="c-num">0</span>)
+<span class="c-key">let</span> load = <span class="c-key">fn</span>(_k) <span class="c-key">raise</span> {
+  calls.val = calls.val + <span class="c-num">1</span>
+  <span class="c-key">if</span> calls.val &gt; <span class="c-num">9</span> { <span class="c-fn">fail</span>(<span class="c-str">"too many calls"</span>) }
+  <span class="c-str">"Grace"</span>
+}
+<span class="c-key">let</span> first = loaded.<span class="c-fn">get_with</span>(<span class="c-str">"user:7"</span>, load)
+<span class="c-key">let</span> second = loaded.<span class="c-fn">get_with</span>(<span class="c-str">"user:7"</span>, load)
+<span class="c-fn">println</span>(<span class="c-str">"\{first} then \{second}, loader ran \{calls.val} time(s)"</span>)</code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>Grace then Grace, loader ran <b>1</b> time(s)</pre>
+    </div>
+  </section>
+
+  <section class="chapter panel" id="fail">
+    <span class="chapter__eyebrow">05 / FAIL</span>
+    <h2>When a load fails</h2>
+    <p>An error from the loader reaches the caller and leaves nothing behind. The next call is a
+      miss again, so a database that comes back up is picked up without clearing anything.</p>
+    <div class="label">
+<pre><code><span class="c-key">let</span> failing : <span class="c-pkg">@moonkart</span>.Cache[String, String] =
+  <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">8L</span>)
+<span class="c-key">let mut</span> failed = <span class="c-key">false</span>
+<span class="c-key">let</span> _ = failing.<span class="c-fn">get_with</span>(<span class="c-str">"x"</span>, <span class="c-key">fn</span>(_k) <span class="c-key">raise</span> {
+  <span class="c-fn">fail</span>(<span class="c-str">"no such row"</span>)
+}) <span class="c-key">catch</span> {
+  _ =&gt; { failed = <span class="c-key">true</span>; <span class="c-str">""</span> }
+}
+<span class="c-fn">println</span>(<span class="c-str">"failed load -&gt; error=\{failed}; stored=\{failing.contains("x")}"</span>)</code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>failed load -&gt; error=<b>true</b>; stored=<b>false</b></pre>
+    </div>
+    <div class="note"><span><b>Concurrent readers.</b> In <code>@moonkart/concurrent</code>, readers of
+      the same key share one loader. When it fails they all receive that error, and nothing is
+      cached, so the next call tries again.</span></div>
+  </section>
+
+  <section class="chapter panel" id="count">
+    <span class="chapter__eyebrow">06 / COUNT</span>
+    <h2>Read the counters</h2>
+    <p><code>stats()</code> returns the counts kept while the cache runs: hits, misses, evictions,
+      and how long loading took. <code>hit_rate()</code> is derived from the first two.</p>
+    <div class="label">
+<pre><code><span class="c-key">let</span> s = cache.<span class="c-fn">stats</span>()
+<span class="c-fn">println</span>(<span class="c-str">"hits \{s.hit_count}, misses \{s.miss_count}"</span>)</code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>hits <b>1</b>, misses <b>0</b></pre>
+    </div>
+    <div class="note"><span><b>Removal listener.</b> Pass one at construction and every entry that
+      leaves reports why: <code>Capacity</code>, <code>Expired</code>, <code>Explicit</code> or
+      <code>Replaced</code>.</span></div>
+  </section>
+
+  <nav class="pager">
+    <a href="./index.html">&larr; Home</a>
+    <a href="./api.html">Every type and function &rarr;</a>
+  </nav>
+
+</main>
+
+<footer class="foot panel">
+  <div>
+    <p class="foot__note">Made of cardboard, and MoonBit.</p>
+    <p class="foot__lic">Apache 2.0</p>
+  </div>
+  <nav class="foot__links" aria-label="Elsewhere">
+    <a href="./index.html">Home</a>
+    <a href="./api.html">API</a>
+    <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
+    <a href="https://mooncakes.io/docs/moonbitstack/moonkart">mooncakes</a>
+  </nav>
+  <div class="stamp" aria-hidden="true"><span><b>PACKED</b>IN MOONBIT</span></div>
+</footer>
+
+</div>
+<script>
+(() => {
+  const root = document.documentElement;
+  const mark = () => root.classList.toggle("at-top", scrollY === 0);
+  addEventListener("scroll", mark, { passive: true });
+  mark();
+})();
+</script>
+</body>
+</html>
