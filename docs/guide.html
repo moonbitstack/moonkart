@@ -30,6 +30,7 @@
   </a>
   <nav class="nav" aria-label="Main">
     <a href="./index.html">Home</a>
+    <a href="./inside.html">Inside</a>
     <a href="./api.html">API</a>
     <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
   </nav>
@@ -58,15 +59,15 @@
       one you picked.</p>
     <div class="label">
 <pre><code><span class="c-key">let</span> cache = <span class="c-pkg">@moonkart</span>.<span class="c-fn">tinylfu_cache</span>(cap=<span class="c-num">1000</span>)
-cache.<span class="c-fn">set</span>(<span class="c-str">"user:42"</span>, <span class="c-str">"Ada"</span>)
-<span class="c-key">match</span> cache.<span class="c-fn">get</span>(<span class="c-str">"user:42"</span>) {
-  Some(name) =&gt; <span class="c-fn">println</span>(<span class="c-str">"read user:42 -&gt; \{name}"</span>)
-  None =&gt; <span class="c-fn">println</span>(<span class="c-str">"read user:42 -&gt; nothing"</span>)
+cache.<span class="c-fn">set</span>(<span class="c-str">"user:128"</span>, <span class="c-str">"Leo"</span>)
+<span class="c-key">match</span> cache.<span class="c-fn">get</span>(<span class="c-str">"user:128"</span>) {
+  Some(name) =&gt; <span class="c-fn">println</span>(<span class="c-str">"read user:128 -&gt; \{name}"</span>)
+  None =&gt; <span class="c-fn">println</span>(<span class="c-str">"read user:128 -&gt; nothing"</span>)
 }</code></pre>
     </div>
     <div class="out panel">
       <p class="out__tag">WHAT IT PRINTS</p>
-<pre>read user:42 -&gt; <b>Ada</b></pre>
+<pre>read user:128 -&gt; <b>Leo</b></pre>
     </div>
   </section>
 
@@ -81,13 +82,13 @@ cache.<span class="c-fn">set</span>(<span class="c-str">"user:42"</span>, <span 
   max_weight=<span class="c-num">12L</span>,
   weigher=<span class="c-key">fn</span>(_k : String, v : String) { Int64::<span class="c-fn">from_int</span>(v.<span class="c-fn">length</span>()) },
 )
-by_weight.<span class="c-fn">set</span>(<span class="c-str">"a"</span>, <span class="c-str">"three"</span>)   <span class="c-com">// 5</span>
-by_weight.<span class="c-fn">set</span>(<span class="c-str">"b"</span>, <span class="c-str">"four"</span>)    <span class="c-com">// 5 + 4 = 9</span>
-by_weight.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span class="c-str">"five"</span>)    <span class="c-com">// 14 &gt; 12, so "a" leaves</span></code></pre>
+by_weight.<span class="c-fn">set</span>(<span class="c-str">"foo"</span>, <span class="c-str">".foo{}"</span>)  <span class="c-com">// 6</span>
+by_weight.<span class="c-fn">set</span>(<span class="c-str">"emm"</span>, <span class="c-str">".emm{}"</span>)  <span class="c-com">// 6 + 6 = 12</span>
+by_weight.<span class="c-fn">set</span>(<span class="c-str">"bar"</span>, <span class="c-str">".bar{}"</span>)  <span class="c-com">// 18 &gt; 12, so "foo" leaves</span></code></pre>
     </div>
     <div class="out panel">
       <p class="out__tag">WHAT IT PRINTS</p>
-<pre>a=<b>false</b> b=<b>true</b> c=<b>true</b></pre>
+<pre>foo=<b>false</b> emm=<b>true</b> bar=<b>true</b></pre>
     </div>
   </section>
 
@@ -106,10 +107,10 @@ by_weight.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span cl
   expiry=<span class="c-pkg">@moonkart</span>.<span class="c-fn">ttl</span>(<span class="c-num">10L</span>),
   clock=<span class="c-key">fn</span>() { now.val },
 )
-timed.<span class="c-fn">set</span>(<span class="c-str">"k"</span>, <span class="c-str">"v"</span>)
-<span class="c-fn">println</span>(<span class="c-str">"at t=0:  \{timed.contains("k")}"</span>)
+timed.<span class="c-fn">set</span>(<span class="c-str">"user:7"</span>, <span class="c-str">"Vega"</span>)
+<span class="c-fn">println</span>(<span class="c-str">"at t=0:  \{timed.contains("user:7")}"</span>)
 now.val = <span class="c-num">11L</span>
-<span class="c-fn">println</span>(<span class="c-str">"at t=11: \{timed.contains("k")}"</span>)</code></pre>
+<span class="c-fn">println</span>(<span class="c-str">"at t=11: \{timed.contains("user:7")}"</span>)</code></pre>
     </div>
     <div class="out panel">
       <p class="out__tag">WHAT IT PRINTS</p>
@@ -131,15 +132,15 @@ at t=11: <b>false</b></pre>
 <span class="c-key">let</span> load = <span class="c-key">fn</span>(_k) <span class="c-key">raise</span> {
   calls.val = calls.val + <span class="c-num">1</span>
   <span class="c-key">if</span> calls.val &gt; <span class="c-num">9</span> { <span class="c-fn">fail</span>(<span class="c-str">"too many calls"</span>) }
-  <span class="c-str">"Grace"</span>
+  <span class="c-str">"Leo"</span>
 }
-<span class="c-key">let</span> first = loaded.<span class="c-fn">get_with</span>(<span class="c-str">"user:7"</span>, load)
-<span class="c-key">let</span> second = loaded.<span class="c-fn">get_with</span>(<span class="c-str">"user:7"</span>, load)
+<span class="c-key">let</span> first = loaded.<span class="c-fn">get_with</span>(<span class="c-str">"user:128"</span>, load)
+<span class="c-key">let</span> second = loaded.<span class="c-fn">get_with</span>(<span class="c-str">"user:128"</span>, load)
 <span class="c-fn">println</span>(<span class="c-str">"\{first} then \{second}, loader ran \{calls.val} time(s)"</span>)</code></pre>
     </div>
     <div class="out panel">
       <p class="out__tag">WHAT IT PRINTS</p>
-<pre>Grace then Grace, loader ran <b>1</b> time(s)</pre>
+<pre>Leo then Leo, loader ran <b>1</b> time(s)</pre>
     </div>
   </section>
 
@@ -152,12 +153,12 @@ at t=11: <b>false</b></pre>
 <pre><code><span class="c-key">let</span> failing : <span class="c-pkg">@moonkart</span>.Cache[String, String] =
   <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">8L</span>)
 <span class="c-key">let mut</span> failed = <span class="c-key">false</span>
-<span class="c-key">let</span> _ = failing.<span class="c-fn">get_with</span>(<span class="c-str">"x"</span>, <span class="c-key">fn</span>(_k) <span class="c-key">raise</span> {
-  <span class="c-fn">fail</span>(<span class="c-str">"no such row"</span>)
+<span class="c-key">let</span> _ = failing.<span class="c-fn">get_with</span>(<span class="c-str">"class:foo"</span>, <span class="c-key">fn</span>(_k) <span class="c-key">raise</span> {
+  <span class="c-fn">fail</span>(<span class="c-str">"no such rule"</span>)
 }) <span class="c-key">catch</span> {
   _ =&gt; { failed = <span class="c-key">true</span>; <span class="c-str">""</span> }
 }
-<span class="c-fn">println</span>(<span class="c-str">"failed load -&gt; error=\{failed}; stored=\{failing.contains("x")}"</span>)</code></pre>
+<span class="c-fn">println</span>(<span class="c-str">"failed load -&gt; error=\{failed}; stored=\{failing.contains("class:foo")}"</span>)</code></pre>
     </div>
     <div class="out panel">
       <p class="out__tag">WHAT IT PRINTS</p>
@@ -200,6 +201,7 @@ at t=11: <b>false</b></pre>
   </div>
   <nav class="foot__links" aria-label="Elsewhere">
     <a href="./index.html">Home</a>
+    <a href="./inside.html">Inside</a>
     <a href="./api.html">API</a>
     <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
     <a href="https://mooncakes.io/docs/moonbitstack/moonkart">mooncakes</a>

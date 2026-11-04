@@ -6,6 +6,14 @@ and it tells you what left the cache and why. The eviction strategy is erased
 behind an open contract, so every constructor returns the same `Cache[K, V]`
 type and a third-party policy plugs in without changing it.
 
+<p>
+  <a href="https://moonbitstack.github.io/moonkart/"><b>Site</b></a> &middot;
+  <a href="https://moonbitstack.github.io/moonkart/guide.html">Guide</a> &middot;
+  <a href="https://moonbitstack.github.io/moonkart/inside.html">Inside</a> &middot;
+  <a href="https://moonbitstack.github.io/moonkart/api.html">API</a> &middot;
+  <a href="https://mooncakes.io/docs/moonbitstack/moonkart">mooncakes</a>
+</p>
+
 ```moonbit
 let cache = @moonkart.lru_cache(cap=1000)
 cache.set("answer", 42)
