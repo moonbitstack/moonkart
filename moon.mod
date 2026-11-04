@@ -36,7 +36,7 @@ keywords = [
 description = "A cache for MoonBit: bounded by count or weight, with expiry, loaders and eviction listeners."
 
 import {
-  "moonbitstack/moonast@0.2.3",
+  "moonbitstack/moonast@0.2.5",
   "moonbitlang/parser@0.4.6",
   "moonbitlang/async@0.22.5",
 }
