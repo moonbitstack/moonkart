@@ -320,4 +320,4 @@ The generated interface is checked in; `moon info --target all && git diff
 
 ## Licence
 
-Apache-2.0.
+Apache 2.0.
