@@ -13,8 +13,8 @@
   --edge:#6d4a29;
   --ink:#26190f;
   --ink-2:#5a4028;
-  --ink-3:#856743;
-  --pen:#a8342a;
+  --ink-3:#6a4d2c;
+  --pen:#96281f;
   --pen-2:#2c5674;
 
   /* paper stuck on the board */
@@ -252,7 +252,7 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
   padding:6px 7px 6px 13px;background:var(--paper);border-radius:1px;transform:rotate(-.55deg);
   box-shadow:0 1px 0 rgba(255,255,255,.75) inset,0 2px 0 rgba(150,118,76,.42),
     0 12px 18px -16px rgba(0,0,0,.95)}
-.get__tag{font-family:var(--neat);font-size:14.5px;line-height:1;color:#8a6d47;white-space:nowrap}
+.get__tag{font-family:var(--neat);font-size:14.5px;line-height:1;color:#73593a;white-space:nowrap}
 .get__cmd{font-family:var(--mono);font-size:12.5px;line-height:1;color:#241a10;
   letter-spacing:-.01em;white-space:nowrap}
 .get__copy{font-family:var(--mono);font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;
@@ -265,7 +265,7 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
   border-top:1px dashed rgba(38,25,15,.3);font-family:var(--neat);font-size:18px;color:var(--ink-2)}
 .facts b{font-family:var(--neat);font-weight:700;font-size:22px;color:var(--ink);margin-right:4px}
 /* the three handling marks every carton carries */
-.marks{display:flex;gap:9px;margin:auto 0 0;padding-top:30px;color:var(--ink);opacity:.42}
+.marks{display:flex;gap:9px;margin:auto 0 0;padding-top:30px;color:var(--ink);opacity:.55}
 .marks svg{width:27px;height:27px;padding:3.5px;stroke:currentColor;fill:none;
   stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;
   border:1px solid color-mix(in srgb,var(--ink) 60%,transparent);border-radius:1px}
@@ -379,7 +379,7 @@ html[data-lid="open"] .openlid{display:none}
 .spec:nth-child(2){--tilt:-.35deg;margin-top:10px;--tape-x:52%;--tape-w:88px}
 .spec:nth-child(3){--tilt:.7deg;--tape-x:26%;--tape-w:120px}
 .spec:nth-child(4){--tilt:-.6deg;margin-top:14px;--tape-x:70%;--tape-w:96px}
-.spec__n{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);
+.spec__n{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-2);
   display:block;margin-bottom:6px}
 .spec__h{font-family:var(--hand);font-weight:700;font-size:28px;line-height:1;margin:0 0 7px}
 .spec__p{margin:0;font-size:17px;line-height:1.62;color:var(--ink-2)}
@@ -402,7 +402,7 @@ pre code{font-family:inherit;background:none;border:0;padding:0;font-size:inheri
 .c-key{color:#2a5372;font-weight:600}
 .c-str{color:#96382c}
 .c-num{color:#2f5f7d}
-.c-com{color:#8a7355;font-style:italic}
+.c-com{color:#7d6749;font-style:italic}
 .c-fn{color:#241a10;font-weight:600}
 .c-pkg{color:#2a5372}
 pre::-webkit-scrollbar{height:6px}
@@ -411,7 +411,7 @@ pre::-webkit-scrollbar-thumb{background:rgba(122,95,60,.3);border-radius:0}
 pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 
 .out{padding:20px 18px;--tilt:.9deg;margin-top:34px;--tape-x:58%;--tape-w:92px}
-.out__tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);margin:0 0 10px}
+.out__tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-2);margin:0 0 10px}
 .out pre{font-size:13.5px;line-height:1.95;white-space:pre-wrap;overflow-wrap:anywhere;
   font-family:var(--mono);color:#4a3423}
 .out pre b{color:var(--ink);font-weight:600}
@@ -429,8 +429,8 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 .foot__links a:hover,.foot__links a:focus-visible{color:var(--ink);
   text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px;
   text-decoration-color:rgba(38,25,15,.45)}
-.stamp{width:104px;height:104px;border-radius:50%;border:2.5px solid rgba(150,44,34,.62);
-  color:#a8342a;display:grid;place-items:center;text-align:center;transform:rotate(-12deg);
+.stamp{width:104px;height:104px;border-radius:50%;border:2.5px solid rgba(150,44,34,.68);
+  color:var(--pen);display:grid;place-items:center;text-align:center;transform:rotate(-12deg);
   font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;line-height:1.7;
   box-shadow:inset 0 0 0 3px rgba(150,44,34,.12)}
 .stamp b{display:block;font-size:13px;letter-spacing:.08em;margin-bottom:1px}
@@ -441,7 +441,7 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
   .hero{grid-template-columns:minmax(0,1fr);gap:0;--tilt:0deg}
   .hero__copy{padding:22px 18px 26px}
   .demo{order:-1;padding:16px 12px 6px;margin:0}
-  .readout{right:0;bottom:0;width:38%;min-width:132px;font-size:9px}
+  .readout{right:0;bottom:0;width:38%;min-width:118px;font-size:8.5px}
   .scribble{display:none}
   .ticket__no{display:none}
   .bar{padding:10px 14px}
@@ -476,9 +476,12 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 /* the step you are reading gets a red tick in the margin */
 .toc a.is-here{color:var(--ink);background:rgba(38,25,15,.1)}
 .toc a.is-here::before{color:var(--pen);opacity:.85}
-.doc__body{display:grid;gap:28px;align-content:start;min-width:0}
+.doc__body{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;align-content:start;min-width:0}
 .chapter{padding:clamp(22px,2.8vw,34px)}
-.chapter__eyebrow{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-3);
+/* A board this long cannot lie at an angle: a half degree over ten thousand
+   pixels walks its ends seventy pixels off the column. */
+.chapter--long{--tilt:0deg}
+.chapter__eyebrow{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-2);
   margin:0 0 6px;display:block}
 .chapter h2{font-family:var(--hand);font-weight:700;font-size:clamp(27px,3vw,34px);line-height:1.05;
   margin:0 0 10px}
@@ -528,11 +531,13 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 }
 @media (width <= 940px){
   .doc{grid-template-columns:minmax(0,1fr)}
-  .toc{position:static;order:-1}
+  /* the table of contents follows the header; taking it out of order put it
+     above the ticket, which read as a second header */
+  .toc{position:static}
   .toc ol{display:flex;flex-wrap:wrap;gap:2px 4px}
   .toc a{font-size:16px;padding:4px 6px}
 }
-.shell.doc > main{display:grid;gap:28px;align-content:start;min-width:0}
+.shell.doc > main{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;align-content:start;min-width:0}
 .api{margin:0 0 6px}
 .api dt{margin:15px 0 0;padding:10px 12px;
   background:linear-gradient(174deg,#fbf3e2,#f1e4c9);
@@ -552,7 +557,7 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 .inside__h{font-family:var(--hand);font-weight:700;font-size:clamp(30px,3.4vw,42px);
   line-height:1.02;margin:2px 0 8px;color:var(--ink)}
 .inside__lede{margin:0;max-width:56ch;color:var(--ink-2);font-size:17.5px;line-height:1.6}
-.kicker__n{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--ink-3);
+.kicker__n{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--ink-2);
   text-transform:uppercase}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
 .chip{font-family:var(--neat);font-size:17px;color:var(--ink-2);background:transparent;
@@ -574,7 +579,7 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 
 .inside__grid{display:grid;grid-template-columns:168px minmax(0,1fr) 258px;gap:22px;align-items:start}
 .col__tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
-  color:var(--ink-3);margin:0 0 8px;display:flex;justify-content:space-between;gap:8px}
+  color:var(--ink-2);margin:0 0 8px;display:flex;justify-content:space-between;gap:8px}
 .col__tag span{color:var(--ink-2)}
 
 .queue{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:250px;overflow:hidden}

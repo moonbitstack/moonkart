@@ -137,7 +137,7 @@ def render() -> str:
         if not groups:
             continue
         toc.append(f'<li><a href="#{anchor}">{module.split("/")[-1]}</a></li>')
-        parts = [f'<section class="chapter panel" id="{anchor}">',
+        parts = [f'<section class="chapter chapter--long panel" id="{anchor}">',
                  f'<span class="chapter__eyebrow">{html.escape(module)}</span>',
                  f'<h2>{html.escape(module.split("/")[-1])}</h2>',
                  f'<p>{html.escape(blurb)}</p>']

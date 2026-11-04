@@ -47,7 +47,7 @@
 </aside>
 
 <main class="doc__body">
-<section class="chapter panel" id="moonkart">
+<section class="chapter chapter--long panel" id="moonkart">
 <span class="chapter__eyebrow">moonbitstack/moonkart</span>
 <h2>moonkart</h2>
 <p>The cache itself: constructors, reads and writes, expiry, invalidation, and the counters.</p>
@@ -110,7 +110,7 @@
 <dd>Fraction of reads that hit, in <code>0.0 ..= 1.0</code>. Zero reads reports <code>0.0</code> rather than dividing by zero.</dd>
 </dl>
 </section>
-<section class="chapter panel" id="concurrent">
+<section class="chapter chapter--long panel" id="concurrent">
 <span class="chapter__eyebrow">moonbitstack/moonkart/concurrent</span>
 <h2>concurrent</h2>
 <p>The same cache behind an await, with loads coalesced per key.</p>
@@ -125,7 +125,7 @@
 <dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
 </dl>
 </section>
-<section class="chapter panel" id="policy">
+<section class="chapter chapter--long panel" id="policy">
 <span class="chapter__eyebrow">moonbitstack/moonkart/policy</span>
 <h2>policy</h2>
 <p>Eviction policies. The cache sees them only through this contract, so a third-party policy plugs in without touching it.</p>
