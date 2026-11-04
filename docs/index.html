@@ -103,9 +103,9 @@
               <rect y="6.5" width="13" height="1" fill="rgba(255,240,214,.018)"/>
             </pattern>
             <linearGradient id="in" x1=".2" y1="0" x2=".8" y2="1">
-              <stop offset="0" stop-color="#5c4128"/>
-              <stop offset=".55" stop-color="#3a2715"/>
-              <stop offset="1" stop-color="#1d1209"/>
+              <stop offset="0" stop-color="#6b4d31"/>
+              <stop offset=".5" stop-color="#452f1b"/>
+              <stop offset="1" stop-color="#241708"/>
             </linearGradient>
             <linearGradient id="faceL" x1=".1" y1="0" x2=".9" y2="1">
               <stop offset="0" stop-color="#e7cba0"/>
@@ -208,6 +208,11 @@
           <!-- The lid: two flaps meeting on a seam, taped shut. `far` is the long one
                that folds away behind the rim; `near` is the short one that swings
                down the right wall. Both keep the slope of the edge they hang from. -->
+          <!-- the rim: the cut edge of the walls. The closed lid lies over it, so it
+               is only there to be found as the flaps come up. -->
+          <path d="M260 96 410 176 260 256 110 176Z M260 103 403 176 260 249 117 176Z"
+                fill="url(#fluteEdge)" fill-rule="evenodd" stroke="#6d4a29" stroke-width="1.2" stroke-linejoin="round"/>
+
           <g class="lidwrap">
             <g data-flap="far" clip-path="url(#mouthClip)">
               <polygon points="110 176 260 96 348.2 143.1 198.2 223.1"
@@ -241,9 +246,6 @@
                   fill="#8a5a3a" opacity=".78">click to open</text>
           </g>
 
-          <!-- the rim goes on last: a ring of corrugated cut edge, above the lid -->
-          <path d="M260 96 410 176 260 256 110 176Z M260 103 403 176 260 249 117 176Z"
-                fill="url(#fluteEdge)" fill-rule="evenodd" stroke="#6d4a29" stroke-width="1.2" stroke-linejoin="round"/>
         </svg>
 
         <button class="openlid" id="openlid" type="button" aria-label="Open the box"></button>
@@ -355,8 +357,8 @@ evictions: <b>1</b></pre>
 
 <script type="module">
 const SLOTS = [
-  { left: "29%", top: "30%", rot: -5 },
-  { left: "45%", top: "33%", rot: 4 },
+  { left: "25%", top: "27%", rot: -5 },
+  { left: "44%", top: "30%", rot: 4 },
 ];
 const CAP = 2;
 const desk = [];
@@ -577,8 +579,9 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 /* A flap let go of the tape turns under its own weight: it gathers speed, then
    lands on the wall and rocks back a couple of degrees. */
 const swingEase = (k) => {
-  const v = 1 - Math.pow(1 - k, 2.2);
-  const rock = k > 0.84 ? -0.05 * Math.sin(((k - 0.84) / 0.16) * Math.PI) : 0;
+  /* a flap is pulled, not thrown: it starts slow, runs, then sits down */
+  const v = Math.pow(k, 1.5);
+  const rock = k > 0.86 ? 0.04 * Math.sin(((k - 0.86) / 0.14) * Math.PI) : 0;
   return v + rock;
 };
 const HALF_PI = Math.PI / 2;
@@ -591,9 +594,9 @@ function drawLid(phiNear, phiFar) {
 
   /* the flap turns into the box, where no light reaches it: it goes under with
      the dark, which is why the eye reads it as sinking and not as a sheet */
-  const shade = 1.06 - 0.44 * Math.sin(phiNear);
+  const shade = 1.04 - 0.05 * Math.sin(phiNear);
   flapNear.querySelector(".flap__body").style.filter = `brightness(${shade.toFixed(3)})`;
-  const farShade = 1.02 - 0.46 * Math.sin(phiFar);
+  const farShade = 1.02 - 0.5 * Math.abs(Math.sin(phiFar));
   flapFar.style.filter = `brightness(${farShade.toFixed(3)})`;
   /* the last few degrees go into the dark of the box, where nothing is lit */
   const into = (phi) => 1 - Math.min(1, Math.max(0, (phi / HALF_PI - 0.7) / 0.3));
@@ -651,9 +654,9 @@ function openLid() {
     seamEl.style.opacity = String(1 - span(t, 0.04, 0.26));
 
     /* near flap: turns down the right wall, rocks back, settles */
-    const phiNear = HALF_PI * swingEase(span(t, 0.06, 0.58));
+    const phiNear = HALF_PI * swingEase(span(t, 0.12, 0.92));
     /* far flap: it is inside the box, so the rim takes it as it goes over */
-    const phiFar = HALF_PI * swingEase(span(t, 0.08, 0.54));
+    const phiFar = -HALF_PI * swingEase(span(t, 0.14, 0.74));
     drawLid(phiNear, phiFar);
 
     if (!dropped && t > 0.44) {
