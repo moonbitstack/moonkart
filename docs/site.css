@@ -423,7 +423,6 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
   text-underline-offset:4px;text-decoration-color:rgba(38,25,15,.45)}
 @media (width <= 620px){
   .walls b{width:40px}
-  .walls b::after{right:9px;width:13px}
   .rail{right:8px;width:22px;top:8px;bottom:8px}
   .rail__thumb{left:2px;width:18px}
   .shell{width:calc(100% - 74px);margin:0 48px 0 26px}
