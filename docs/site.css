@@ -279,6 +279,13 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
 .layer-back{z-index:1}
 .layer-cards{z-index:2;position:absolute;inset:0}
 .layer-front{z-index:3}
+/* the box gives a little under the hand that opens it */
+.stage.is-thumped{animation:thump .26s cubic-bezier(.3,.9,.3,1)}
+@keyframes thump{
+  0%{transform:scale(1)}
+  38%{transform:scale(1.012,.982) translateY(2px)}
+  100%{transform:scale(1)}
+}
 
 /* the lid: the whole stage is the target while the box is still sealed */
 .openlid{position:absolute;inset:0;z-index:6;width:100%;height:100%;padding:0;border:0;
@@ -287,6 +294,7 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
 .stage:has(.openlid:hover) .lidwrap{filter:brightness(1.035)}
 /* once the box is open the lid is gone; the near flap stays, hanging on the wall */
 html[data-lid="open"] .lidwrap>[data-flap="far"],
+html[data-lid="open"] .lidwrap>[data-flap="near"],
 html[data-lid="open"] .lid__seam,
 html[data-lid="open"] .lid__tape,
 html[data-lid="open"] .lid__note,
@@ -295,7 +303,7 @@ html[data-lid="open"] .openlid{display:none}
 .flap__body{filter:brightness(1.06) saturate(.97)}
 .tray.is-locked{opacity:.6;pointer-events:none}
 
-.slot{position:absolute;width:30%;height:29%;transform-origin:50% 100%;
+.slot{position:absolute;width:26%;height:26%;transform-origin:50% 100%;
   transition:transform .45s cubic-bezier(.2,.8,.3,1),opacity .3s}
 .slot[hidden]{display:none}
 /* A slip is cut from the small box, so its board is a fraction of the thick

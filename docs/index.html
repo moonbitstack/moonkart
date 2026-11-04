@@ -206,12 +206,13 @@
           </g>
 
           <!-- The lid: two flaps meeting on a seam, taped shut. `far` is the long one
-               that folds away behind the rim; `near` is the short one that swings
-               down the right wall. Both keep the slope of the edge they hang from. -->
+               that folds away behind the rim; `near` is the short one that lifts
+               towards the eye. Both turn up and out, and both keep the slope of
+               the edge they hang from. -->
           <!-- the rim: the cut edge of the walls. The closed lid lies over it, so it
                is only there to be found as the flaps come up. -->
-          <path d="M260 96 410 176 260 256 110 176Z M260 103 403 176 260 249 117 176Z"
-                fill="url(#fluteEdge)" fill-rule="evenodd" stroke="#6d4a29" stroke-width="1.2" stroke-linejoin="round"/>
+          <path d="M260 96 410 176 260 256 110 176Z M260 99.5 406.5 176 260 252.5 113.5 176Z"
+                fill="url(#fluteEdge)" fill-rule="evenodd" stroke="#6d4a29" stroke-width="1" stroke-linejoin="round"/>
 
           <g class="lidwrap">
             <g data-flap="far" clip-path="url(#mouthClip)">
@@ -232,12 +233,13 @@
               <path d="M198.2 223.1 348.2 143.1" stroke="rgba(70,44,18,.42)" stroke-width="1.2"/>
               <path d="M199.6 222 349.6 142" stroke="rgba(255,248,230,.22)" stroke-width="1"/>
             </g>
-            <!-- the tape is split along the seam: each half stays stuck to its flap -->
-            <g class="lid__tape">
+            <!-- the tape is split along the seam: each half stays stuck to its flap,
+                 and neither may be written past the rim -->
+            <g class="lid__tape" clip-path="url(#mouthClip)">
               <polygon class="tape" data-tape="near" points="353.5 140.2 192.9 225.9 186.8 222.6 347.3 137"
                        fill="rgba(255,250,238,.32)"/>
               <polygon class="tape" data-tape="far" points="359.7 143.5 199.1 229.2 192.9 225.9 353.5 140.2"
-                       clip-path="url(#mouthClip)" fill="rgba(255,250,238,.32)"/>
+                       fill="rgba(255,250,238,.32)"/>
             </g>
             <!-- written on the lid, so it takes the lid's own two axes: along the
                  seam, and away towards the back of the box -->
@@ -256,7 +258,7 @@
             <dt>hits</dt><dd id="s-hit">0</dd>
             <dt>misses</dt><dd id="s-miss">0</dd>
             <dt>evictions</dt><dd id="s-evict">0</dd>
-            <dt>in the box</dt><dd id="s-size">0 / 2</dd>
+            <dt>in the box</dt><dd id="s-size">0 / 4</dd>
           </dl>
         </div>
       </div>
@@ -301,13 +303,15 @@
 
   <section class="code">
     <div class="panel code__board">
-      <p class="label__tag">THE SAME THREE CALLS, ON A BOX THAT HOLDS TWO</p>
+      <p class="label__tag">SIX CALLS, ON A BOX THAT HOLDS FOUR</p>
       <div class="label">
-<pre><code><span class="c-key">let</span> cache = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">2L</span>)
+<pre><code><span class="c-key">let</span> cache = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">4L</span>)
 cache.<span class="c-fn">set</span>(<span class="c-str">"a"</span>, <span class="c-num">1</span>)
 cache.<span class="c-fn">set</span>(<span class="c-str">"b"</span>, <span class="c-num">2</span>)
+cache.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span class="c-num">3</span>)
+cache.<span class="c-fn">set</span>(<span class="c-str">"d"</span>, <span class="c-num">4</span>)
 cache.<span class="c-fn">get</span>(<span class="c-str">"a"</span>)      <span class="c-com">// "a" is now the most recent</span>
-cache.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span class="c-num">3</span>)   <span class="c-com">// full: "b" leaves</span></code></pre>
+cache.<span class="c-fn">set</span>(<span class="c-str">"e"</span>, <span class="c-num">5</span>)   <span class="c-com">// full: "b" leaves</span></code></pre>
       </div>
     </div>
     <div class="panel out">
@@ -315,7 +319,7 @@ cache.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span class=
 <pre>a is present: <b>true</b>
 read a: <b>1</b>
 b survives: <b>false</b>
-c is present: <b>true</b>
+e is present: <b>true</b>
 hits: <b>1</b>, misses: <b>0</b>
 evictions: <b>1</b></pre>
     </div>
@@ -341,26 +345,32 @@ evictions: <b>1</b></pre>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <pattern id="fluteEdge" width="7" height="7" patternUnits="userSpaceOnUse">
-      <rect width="7" height="7" fill="#8d6740"/>
-      <path d="M0 5.2 Q1.75 1.6 3.5 5.2 T7 5.2" fill="none" stroke="#63472a" stroke-width=".8"/>
-      <rect width="7" height="1.1" fill="#a87e50"/>
-      <rect y="5.9" width="7" height="1.1" fill="#73512e"/>
+    <!-- the flute seen across the thin edge of the board: one wave per 6 units,
+         two liners a hair thick on either side -->
+    <pattern id="fluteEdge" width="6" height="3.5" patternUnits="userSpaceOnUse">
+      <rect width="6" height="3.5" fill="#8d6740"/>
+      <path d="M0 2.75 Q1.5 .95 3 2.75 T6 2.75" fill="none" stroke="#63472a" stroke-width=".65"/>
+      <rect width="6" height=".6" fill="#a87e50"/>
+      <rect y="2.95" width="6" height=".55" fill="#73512e"/>
     </pattern>
     <!-- The far flap is inside the box. Clipped to the mouth, it slides out of
          sight behind the front rim as it folds, exactly as it would in a photo. -->
     <clipPath id="mouthClip">
-      <path d="M260 92 414 176 260 260 106 176Z"/>
+      <path d="M260 99.5 406.5 176 260 252.5 113.5 176Z"/>
     </clipPath>
   </defs>
 </svg>
 
 <script type="module">
+/* where an entry sits in the box: a fan, as if the carton had been packed and
+   the slips had shifted on their way here */
 const SLOTS = [
-  { left: "25%", top: "27%", rot: -5 },
-  { left: "44%", top: "30%", rot: 4 },
+  { left: "14%", top: "23%", rot: -11 },
+  { left: "27%", top: "29%", rot: -4 },
+  { left: "41%", top: "24%", rot: 3 },
+  { left: "54%", top: "19%", rot: 10 },
 ];
-const CAP = 2;
+const CAP = 4;
 const desk = [];
 
 const root = document.documentElement;
@@ -490,14 +500,16 @@ trayEl.addEventListener("click", (e) => {
   put(b.dataset.k, b.dataset.v);
 });
 
-/* two cards already in the box, so the page does not open on an empty stage */
+/* the box is already packed, so the page does not open on an empty stage */
 if (engine) {
   put("user:128", "Leo");
   put("user:7", "Vega");
+  put("class:foo", ".foo{}");
+  put("class:emm", ".emm{}");
   paint();
 } else {
   hintEl.textContent = "Opened from a file, the live cache cannot load. Serve the folder over HTTP to try it.";
-  ["user:128|Leo", "user:7|Vega"].forEach((pair, i) => {
+  ["user:128|Leo", "user:7|Vega", "class:foo|.foo{}", "class:emm|.emm{}"].forEach((pair, i) => {
     const [k, v] = pair.split("|");
     const el = card(k, v);
     cardsEl.appendChild(el);
@@ -507,16 +519,16 @@ if (engine) {
 }
 
 /* --- the lid --------------------------------------------------------------
-   The box arrives taped shut. One click cuts the tape: the near flap falls
-   down the right wall, the far one folds away behind the rim, and the cards
-   are there. It does not close again — the state goes to sessionStorage, and
-   the check in the head puts the seal back on a reload, not on a link. */
+   The box arrives taped shut. One click cuts the tape: both flaps turn up and
+   away from the inside of the box, the rim takes them as they go over, and the
+   cards are there. It does not close again — the state goes to sessionStorage,
+   and the check in the head puts the seal back on a reload, not on a link. */
 const LID_KEY = "moonkart:lid";
+const stageEl = document.getElementById("stage");
 const lidWrap = document.querySelector(".lidwrap");
 const openBtn = document.getElementById("openlid");
 const flapNear = lidWrap.querySelector('[data-flap="near"]');
 const flapFar = lidWrap.querySelector('[data-flap="far"]');
-const tapeEl = lidWrap.querySelector(".lid__tape");
 const seamEl = lidWrap.querySelector(".lid__seam");
 const noteEl = lidWrap.querySelector(".lid__note");
 
@@ -563,7 +575,7 @@ function setFlap(g, pts) {
       `L${a[0].toFixed(2)} ${(a[1] + h).toFixed(2)}Z`;
   };
   const cut = g.querySelector(".flap__edge");
-  if (cut) cut.setAttribute("d", band(4.5));
+  if (cut) cut.setAttribute("d", band(3.5));
   const cast = g.querySelector(".flap__cast");
   if (cast) cast.setAttribute("d", band(22));
 }
@@ -592,14 +604,16 @@ function drawLid(phiNear, phiFar) {
   tapeNear.setAttribute("points", asPoints(TAPE_NEAR.map(([s, t]) => project(NEAR, s, t, phiNear))));
   tapeFar.setAttribute("points", asPoints(TAPE_FAR.map(([s, t]) => project(FAR, s, t, phiFar))));
 
-  /* the flap turns into the box, where no light reaches it: it goes under with
-     the dark, which is why the eye reads it as sinking and not as a sheet */
-  const shade = 1.04 - 0.05 * Math.sin(phiNear);
+  /* Both flaps turn up and over, away from the inside of the box: the near one
+     towards the eye, the far one away behind the rim. Either turns its back on
+     the light, and both leave through the rim, which is what closes the line
+     they are drawn along. */
+  const shade = 1.04 - 0.08 * Math.abs(Math.sin(phiNear));
   flapNear.querySelector(".flap__body").style.filter = `brightness(${shade.toFixed(3)})`;
   const farShade = 1.02 - 0.5 * Math.abs(Math.sin(phiFar));
   flapFar.style.filter = `brightness(${farShade.toFixed(3)})`;
-  /* the last few degrees go into the dark of the box, where nothing is lit */
-  const into = (phi) => 1 - Math.min(1, Math.max(0, (phi / HALF_PI - 0.7) / 0.3));
+  /* the last few degrees are already past the rim, where neither face is seen */
+  const into = (phi) => 1 - Math.min(1, Math.max(0, (Math.abs(phi) / HALF_PI - 0.6) / 0.4));
   flapNear.style.opacity = String(into(phiNear));
   flapFar.style.opacity = String(into(phiFar));
 }
@@ -607,7 +621,7 @@ function drawLid(phiNear, phiFar) {
 const lidOpen = () => root.dataset.lid === "open";
 
 if (lidOpen()) {
-  drawLid(HALF_PI, HALF_PI);
+  drawLid(-HALF_PI, HALF_PI);
 } else {
   drawLid(0, 0);
   trayEl.classList.add("is-locked");
@@ -616,7 +630,7 @@ if (lidOpen()) {
 
 function dropCards() {
   live.forEach((c, i) => {
-    c.el.style.setProperty("--d", i * 90 + "ms");
+    c.el.style.setProperty("--d", i * 45 + "ms");
     c.el.classList.remove("replay");
     void c.el.offsetWidth;
     c.el.classList.add("replay");
@@ -630,10 +644,14 @@ function openLid() {
   try { sessionStorage.setItem(LID_KEY, "open"); } catch (e) {}
   openBtn.disabled = true;
   trayEl.classList.remove("is-locked");
+  /* the box takes the knock of the tape going */
+  stageEl.classList.remove("is-thumped");
+  void stageEl.offsetWidth;
+  stageEl.classList.add("is-thumped");
 
   /* the box still opens, it just does not perform */
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    drawLid(HALF_PI, HALF_PI);
+    drawLid(-HALF_PI, HALF_PI);
     root.dataset.lid = "open";
     dropCards();
     hintEl.textContent = "Click a card in the box to ask for it again.";
@@ -642,7 +660,7 @@ function openLid() {
   }
 
   const t0 = performance.now();
-  const DUR = 820;
+  const DUR = 200;
   let dropped = false;
   const span = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
 
@@ -653,20 +671,20 @@ function openLid() {
     noteEl.style.opacity = String(1 - span(t, 0, 0.1));
     seamEl.style.opacity = String(1 - span(t, 0.04, 0.26));
 
-    /* near flap: turns down the right wall, rocks back, settles */
-    const phiNear = HALF_PI * swingEase(span(t, 0.12, 0.92));
-    /* far flap: it is inside the box, so the rim takes it as it goes over */
-    const phiFar = -HALF_PI * swingEase(span(t, 0.14, 0.74));
+    /* both flaps turn up and over, away from the inside of the box: the near
+       one towards the eye, the far one away. Same sign, opposite sides. */
+    const phiNear = -HALF_PI * swingEase(span(t, 0.05, 0.95));
+    const phiFar = -HALF_PI * swingEase(span(t, 0.07, 0.8));
     drawLid(phiNear, phiFar);
 
-    if (!dropped && t > 0.44) {
+    if (!dropped && t > 0.3) {
       dropped = true;
       dropCards();
       hintEl.textContent = "Click a card in the box to ask for it again.";
     }
     if (t < 1) return requestAnimationFrame(step);
 
-    drawLid(HALF_PI, HALF_PI);
+    drawLid(-HALF_PI, HALF_PI);
     root.dataset.lid = "open";
     cutting = false;
   };
