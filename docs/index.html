@@ -250,9 +250,6 @@
 
         </svg>
 
-        <!-- a card taken out of the box is held here, above the drawing -->
-        <div class="layer-held" id="held" aria-hidden="true"></div>
-
         <button class="openlid" id="openlid" type="button" aria-label="Open the box"></button>
 
         <div class="readout" id="readout">
@@ -373,10 +370,10 @@ evictions: <b>1</b></pre>
 /* where an entry sits in the box: a fan, as if the carton had been packed and
    the slips had shifted on their way here */
 const SLOTS = [
-  { left: "14%", top: "23%", rot: -11 },
-  { left: "27%", top: "29%", rot: -4 },
-  { left: "41%", top: "24%", rot: 3 },
-  { left: "54%", top: "19%", rot: 10 },
+  { left: "24%", top: "28%", rot: -8 },
+  { left: "32%", top: "31%", rot: -3 },
+  { left: "40%", top: "28%", rot: 3 },
+  { left: "48%", top: "26%", rot: 8 },
 ];
 const CAP = 4;
 const desk = [];
@@ -390,7 +387,6 @@ if (forced === "shout" || (forced !== "hand" && Math.random() < 0.2)) {
 }
 
 const cardsEl = document.getElementById("cards");
-const heldEl = document.getElementById("held");
 const trayEl = document.getElementById("tray");
 const hintEl = document.getElementById("hint");
 const box = {
@@ -481,26 +477,17 @@ function put(key, value) {
   paint();
 }
 
-/* Taking a card: it comes out of the box and is held up, then goes back into
-   its own place in the fan. Only one is ever held at a time. */
-function sendHome(el) {
-  clearTimeout(el._home);
-  el.classList.remove("is-drawn");
-  el._home = setTimeout(() => {
-    if (el.parentElement !== heldEl) return;
-    const seat = el._seat;
-    cardsEl.insertBefore(el, seat && seat.parentElement === cardsEl ? seat : null);
-  }, 300);
-}
-
+/* Taking a card: it is drawn up out of the fan and held there for a moment,
+   clear of its neighbours, then settles back. It never leaves the box. */
 function takeCard(el) {
-  if (el.parentElement === heldEl) return;
-  for (const other of [...heldEl.children]) sendHome(other);
-  el._seat = el.nextSibling;
-  heldEl.appendChild(el);
+  if (el.classList.contains("is-drawn")) return;
+  for (const other of cardsEl.querySelectorAll(".is-drawn")) {
+    clearTimeout(other._home);
+    other.classList.remove("is-drawn");
+  }
   el.classList.add("is-drawn");
   clearTimeout(el._home);
-  el._home = setTimeout(() => sendHome(el), 780);
+  el._home = setTimeout(() => el.classList.remove("is-drawn"), 780);
 }
 
 function ask(key, el) {

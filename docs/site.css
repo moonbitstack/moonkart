@@ -279,12 +279,10 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
 .stage svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 .layer-back{z-index:1}
 .layer-cards{z-index:2;position:absolute;inset:0;
-  /* clipped to the mouth, so a card's feet sit behind the front walls instead
-     of being drawn across them */
-  clip-path:polygon(50% 5.335%, 94.665% 28.659%, 50% 51.98%, 5.335% 28.659%)}
-/* a card taken out of the box is held above the whole drawing */
-.layer-held{z-index:5;position:absolute;inset:0;pointer-events:none}
-.layer-held .slot{pointer-events:none}
+  /* A card is cut only by the two front walls: below those edges it would be in
+     front of the board. Above them it may stand up over the rim — the rim is
+     drawn later, so it passes behind it the way a card in a box would. */
+  clip-path:polygon(4.27% 28.66%, 50% 53.05%, 95.73% 28.66%, 95.73% 0, 4.27% 0)}
 .layer-front{z-index:3}
 /* the box gives a little under the hand that opens it */
 .stage.is-thumped{animation:thump .26s cubic-bezier(.3,.9,.3,1)}
@@ -303,13 +301,14 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
    hanging on the front wall, where it stayed */
 html[data-lid="open"] .lidwrap>[data-flap="far"],
 html[data-lid="open"] .lid__seam,
+html[data-lid="open"] .tape,
 html[data-lid="open"] .lid__note,
 html[data-lid="open"] .openlid{display:none}
 /* the flap is a face of its own, so it stands a shade brighter than the wall */
 .flap__body{filter:brightness(1.06) saturate(.97)}
 .tray.is-locked{opacity:.6;pointer-events:none}
 
-.slot{position:absolute;width:26%;height:26%;transform-origin:50% 100%;
+.slot{position:absolute;width:24%;height:24%;transform-origin:50% 100%;
   transition:transform .45s cubic-bezier(.2,.8,.3,1),opacity .3s}
 .slot[hidden]{display:none}
 /* A slip is cut from the small box, so its board is a fraction of the thick
@@ -325,15 +324,16 @@ html[data-lid="open"] .openlid{display:none}
 /* a card that has just been put in drops into place, once. The class goes away
    afterwards, so moving the card about never replays it. */
 .slot.landing .cardface{animation:drop .42s cubic-bezier(.2,1.2,.4,1) both}
-/* you reach for a card, it lifts */
-.slot:hover{z-index:4}
-.slot:hover .cardface{transform:translateY(-5px);
+/* you reach for a card, it lifts. The z-index stays below the front layer's
+   3, so a card can never end up drawn over the rim. */
+.slot:hover{z-index:1}
+.slot:hover .cardface{transform:translateY(-3px) scale(1.02);
   box-shadow:0 .8px 0 rgba(150,118,76,.28), 0 14px 20px -14px rgba(0,0,0,.8)}
 /* and when you take it, it comes out of the box like a card out of a hand */
-.slot.is-drawn{z-index:6}
-.slot.is-drawn .cardface{transform:translate(-4%,-58%) rotate(-2.5deg) scale(1.16);
-  transition:transform .3s cubic-bezier(.2,1.15,.35,1), box-shadow .3s;
-  box-shadow:0 .8px 0 rgba(150,118,76,.3), 0 26px 30px -20px rgba(0,0,0,.85)}
+.slot.is-drawn{z-index:1}
+.slot.is-drawn .cardface{transform:scale(1.14) rotate(-2deg);transform-origin:50% 0;
+  transition:transform .28s cubic-bezier(.2,1.15,.35,1), box-shadow .28s;
+  box-shadow:0 .8px 0 rgba(150,118,76,.3), 0 22px 28px -18px rgba(0,0,0,.85)}
 /* the ring that says the answer came from the box, not from a loader */
 .cardface::before{content:"";position:absolute;inset:-3px;border-radius:2px;opacity:0;
   pointer-events:none;box-shadow:0 0 0 0 rgba(168,52,42,.5)}
@@ -471,7 +471,9 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
   .hero{grid-template-columns:minmax(0,1fr);gap:0;--tilt:0deg}
   .hero__copy{padding:22px 18px 26px}
   .demo{order:-1;padding:16px 12px 6px;margin:0}
-  .readout{right:0;bottom:0;width:38%;min-width:118px;font-size:8.5px}
+  /* on a phone the note would sit over the cards, so it is tucked into the
+     lower-left corner, where there is only wall */
+  .readout{left:0;right:auto;bottom:0;width:40%;min-width:104px;font-size:8px}
   .scribble{display:none}
   .ticket__no{display:none}
   .bar{padding:10px 14px}
