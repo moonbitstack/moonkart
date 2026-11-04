@@ -61,3 +61,91 @@ pub fn mk_stats() -> String {
   let s = c.stats()
   "\{s.hit_count}\t\{s.miss_count}\t\{s.eviction_count}\t\{c.size()}"
 }
+
+///|
+/// Why an entry left, in one word, for the page to print.
+fn reason_code(reason : @moonkart.EvictionReason) -> String {
+  match reason {
+    Capacity => "capacity"
+    Expired => "expired"
+    Explicit => "explicit"
+    Replaced => "replaced"
+  }
+}
+
+///|
+/// Replays a comma-separated trace through one policy and reports every step.
+///
+/// Each line is `key \t hit|miss \t what left`, and the name of the entry that
+/// left follows a colon with its reason, so the page can say *why* the box gave
+/// something up rather than only that it did.
+fn replay_line(
+  cache : @moonkart.Cache[String, String],
+  key : String,
+  left : Array[String],
+) -> String {
+  let state = match cache.get(key) {
+    Some(_) => "hit"
+    None => {
+      cache.set(key, key)
+      "miss"
+    }
+  }
+  let moved = left.join(",")
+  left.clear()
+  "\{key}\t\{state}\t\{moved}"
+}
+
+///|
+/// Runs the trace against the named policy. Returns one line per request.
+#export_name("mk_replay")
+pub fn mk_replay(policy : String, cap : Int32, trace : String) -> String {
+  let cap = Int64::from_int(cap)
+  let left : Array[String] = []
+  let note = fn(k : String, _v : String, r : @moonkart.EvictionReason) {
+    left.push("\{k}:\{reason_code(r)}")
+  }
+  let cache = match policy {
+    "lru" => @moonkart.lru_cache(cap~, removal_listener=note)
+    "s3fifo" => @moonkart.s3fifo_cache(cap~, removal_listener=note)
+    _ => @moonkart.tinylfu_cache(cap~, removal_listener=note)
+  }
+  let lines : Array[String] = []
+  for key in trace.split(",") {
+    lines.push(replay_line(cache, key.to_owned(), left))
+  }
+  lines.join("\n")
+}
+
+///|
+/// Replays the same trace through the three policies and returns their hit
+/// counts as `lru \t n \t s3fifo \t n \t tinylfu \t n`.
+#export_name("mk_survey")
+pub fn mk_survey(cap : Int32, trace : String, watch : String) -> String {
+  // one Iter can be walked once, and the three policies each need the whole trace
+  let keys = trace.split(",").to_array()
+  let names = watch.split(",").to_array()
+  let lines : Array[String] = []
+  for policy in ["lru", "s3fifo", "tinylfu"] {
+    let cache = match policy {
+      "lru" => @moonkart.lru_cache(cap=Int64::from_int(cap))
+      "s3fifo" => @moonkart.s3fifo_cache(cap=Int64::from_int(cap))
+      _ => @moonkart.tinylfu_cache(cap=Int64::from_int(cap))
+    }
+    let mut hits = 0
+    for k in keys {
+      let key = k.to_owned()
+      match cache.get(key) {
+        Some(_) => hits = hits + 1
+        None => cache.set(key, key)
+      }
+    }
+    let held : Array[String] = []
+    for w in names {
+      let name = w.to_owned()
+      held.push(if cache.contains(name) { "1" } else { "0" })
+    }
+    lines.push("\{policy}\t\{hits}\t\{held.join("")}")
+  }
+  lines.join("\n")
+}

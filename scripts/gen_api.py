@@ -191,6 +191,7 @@ def render() -> str:
   <nav class="nav" aria-label="Main">
     <a href="./index.html">Home</a>
     <a href="./guide.html">Guide</a>
+    <a href="./inside.html">Inside</a>
     <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
   </nav>
 </header>
@@ -219,6 +220,7 @@ def render() -> str:
   <nav class="foot__links" aria-label="Elsewhere">
     <a href="./index.html">Home</a>
     <a href="./guide.html">Guide</a>
+    <a href="./inside.html">Inside</a>
     <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
     <a href="https://mooncakes.io/docs/moonbitstack/moonkart">mooncakes</a>
   </nav>

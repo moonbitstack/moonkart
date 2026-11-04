@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en" class="at-top">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside &mdash; moonkart</title>
+<meta name="description" content="Twenty requests through one box: watch W-TinyLFU, S3-FIFO and LRU decide what stays, driven by the compiled library.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23c9a678'/%3E%3Cpath d='M5 12 16 6l11 6v14l-11 6-11-6z' fill='%23e0c69e' stroke='%236b4a2f' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M5 12l11 6 11-6M16 18v14' stroke='%236b4a2f' stroke-width='1.6' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@300;400;700&family=Permanent+Marker&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./site.css">
+<script src="./shell.js" defer></script>
+</head>
+<body>
+<div class="lamp" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+<div class="walls" aria-hidden="true"><i></i><b></b></div>
+<div class="rail" aria-hidden="true"><span class="rail__thumb"></span></div>
+<div class="shell">
+
+<header class="bar panel">
+  <a class="ticket" href="./index.html">
+    <svg class="ticket__mark" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M4 11.5 16 5l12 6.5v14L16 32 4 25.5z" fill="#e8cea0" stroke="#6b4a2f" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M4 11.5 16 18l12-6.5M16 18v13.6" stroke="#6b4a2f" stroke-width="1.7" fill="none" stroke-linejoin="round"/>
+    </svg>
+    <span class="ticket__name">moonkart</span>
+    <span class="ticket__no"><b>INSIDE THE BOX</b>no. 128 / moonbit</span>
+  </a>
+  <nav class="nav" aria-label="Main">
+    <a href="./index.html">Home</a>
+    <a href="./guide.html">Guide</a>
+    <a href="./api.html">API</a>
+    <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
+  </nav>
+</header>
+
+<main>
+
+  <section class="panel inside">
+    <div class="inside__head">
+      <div>
+        <p class="kicker">The trace <span class="kicker__n">20 requests, 6 places</span></p>
+        <h1 class="inside__h">One box, twenty requests</h1>
+        <p class="inside__lede">Two keys are asked for again and again. Ten are asked for once and never
+          again. Every decision below is made by the compiled library: the page only draws what it says.</p>
+      </div>
+      <div class="chips" role="group" aria-label="Policy">
+        <button class="chip" type="button" data-policy="lru">LRU</button>
+        <button class="chip" type="button" data-policy="s3fifo">S3-FIFO</button>
+        <button class="chip is-on" type="button" data-policy="tinylfu">W-TinyLFU</button>
+      </div>
+    </div>
+
+    <div class="inside__bar">
+      <div class="transport">
+        <button class="act" type="button" id="step">Step</button>
+        <button class="act act--ink" type="button" id="play">Play</button>
+        <button class="act" type="button" id="reset">Reset</button>
+      </div>
+      <p class="tally-line" id="tally">0 of 20 shown &middot; hits 0 &middot; misses 0</p>
+    </div>
+
+    <div class="inside__grid">
+      <div class="queuebox">
+        <p class="col__tag">Coming in</p>
+        <ol class="queue" id="queue"></ol>
+      </div>
+
+      <div class="traybox">
+        <p class="col__tag">In the box <span id="held">0 / 6</span></p>
+        <div class="tray2" id="tray2"></div>
+        <div class="deskrow" id="deskrow" aria-hidden="true"></div>
+        <p class="inside__hint" id="hint">Press Step, or let it run.</p>
+      </div>
+
+      <div class="ledgerbox">
+        <p class="col__tag">What happened</p>
+        <ol class="ledger" id="ledger"></ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel survey">
+    <div class="survey__head">
+      <h2>What survives the scan</h2>
+      <p>The same trace, stopped the moment the scan ends. That is when the difference shows: what is still in the box at that point is what the next request will find.</p>
+    </div>
+    <div class="survey__grid" id="survey">
+      <div class="col"><p class="col__policy">LRU</p></div>
+      <div class="col"><p class="col__policy">S3-FIFO</p></div>
+      <div class="col"><p class="col__policy">W-TinyLFU</p></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot panel">
+  <div>
+    <p class="foot__note">Drawn from the compiled cache, not a mock.</p>
+    <p class="foot__lic">Apache 2.0</p>
+  </div>
+  <nav class="foot__links" aria-label="Elsewhere">
+    <a href="./index.html">Home</a>
+    <a href="./guide.html">Guide</a>
+    <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
+    <a href="https://mooncakes.io/docs/moonbitstack/moonkart">mooncakes</a>
+  </nav>
+  <div class="stamp" aria-hidden="true"><span><b>HK</b>PACKED IN MOONBIT</span></div>
+</footer>
+
+</div>
+
+<script type="module">
+const CAP = 6;
+const HOT = ["Leo", "Vega"];
+const SCAN = ["foo", "emm", "bar", "s1", "s2", "s3", "s4", "s5", "s6", "s7"];
+const WARM = ["Leo", "Vega", "Leo", "Vega"];
+const TRACE = [...WARM, ...SCAN, "Leo", "Vega", "Leo", "Vega", "Leo", "Vega"];
+const TRACE_S = TRACE.join(",");
+/* the survey stops the clock right after the scan: that is the moment worth
+   looking at, before the hot keys are read again and warm everything back up */
+const CUT_S = [...WARM, ...SCAN].join(",");
+
+const $ = (id) => document.getElementById(id);
+const queue = $("queue"), tray = $("tray2"), desk = $("deskrow"),
+      ledger = $("ledger"), hint = $("hint"), tally = $("tally"),
+      held = $("held"), survey = $("survey");
+
+let engine = null, policy = "tinylfu", steps = [], at = 0, timer = 0;
+let resident = [], fallen = [], log = [], hits = 0;
+
+const POCKETS = CAP;
+
+function buildTray() {
+  tray.innerHTML = "";
+  for (let i = 0; i < POCKETS; i++) {
+    const p = document.createElement("div");
+    p.className = "pocket";
+    tray.appendChild(p);
+  }
+}
+
+const AHEAD = 8;
+function paintQueue() {
+  queue.innerHTML = "";
+  const from = Math.max(0, at - 1);
+  TRACE.slice(from, from + AHEAD).forEach((k, i) => {
+    const li = document.createElement("li");
+    li.className = "qslip" + (HOT.includes(k) ? " qslip--hot" : "");
+    if (from + i < at) li.classList.add("is-now");
+    li.textContent = k;
+    queue.appendChild(li);
+  });
+  if (at >= TRACE.length) queue.innerHTML = '<li class="qslip is-done">end of trace</li>';
+}
+
+function paintTray() {
+  [...tray.children].forEach((p, i) => {
+    p.innerHTML = "";
+    p.classList.remove("is-hot");
+    const key = resident[i];
+    if (!key) return;
+    const s = document.createElement("span");
+    s.className = "pslip";
+    s.textContent = key;
+    if (HOT.includes(key)) p.classList.add("is-hot");
+    p.appendChild(s);
+  });
+  held.textContent = `${resident.length} / ${CAP}`;
+}
+
+function paintLedger() {
+  ledger.innerHTML = "";
+  log.slice(-7).reverse().forEach((row) => {
+    const li = document.createElement("li");
+    li.className = row.hit ? "led led--hit" : "led";
+    li.innerHTML =
+      `<span class="led__n"></span><span class="led__k"></span>` +
+      `<span class="led__v"></span>`;
+    li.querySelector(".led__n").textContent = String(row.n).padStart(2, "0");
+    li.querySelector(".led__k").textContent = row.key;
+    li.querySelector(".led__v").textContent = row.hit ? "hit" : "miss";
+    if (row.left) {
+      const em = document.createElement("em");
+      em.textContent = row.left + " out";
+      li.appendChild(em);
+    }
+    ledger.appendChild(li);
+  });
+}
+
+function paintTally() {
+  tally.textContent = `${at} of ${TRACE.length} shown \u00b7 hits ${hits} \u00b7 misses ${at - hits}`;
+}
+
+function reset() {
+  stop();
+  at = 0; hits = 0; resident = []; fallen = []; log = [];
+  desk.innerHTML = "";
+  hint.textContent = "Press Step, or let it run.";
+  buildTray(); paintTray(); paintQueue(); paintLedger(); paintTally();
+}
+
+function apply(step) {
+  const { key, hit, left } = step;
+  at += 1;
+  if (hit) {
+    hits += 1;
+  } else if (!resident.includes(key)) {
+    if (resident.length < CAP) resident.push(key);
+    else resident.push(key);
+  }
+  if (left) {
+    const gone = left.split(",").map((s) => s.split(":")[0]);
+    resident = resident.filter((k) => !gone.includes(k));
+    gone.forEach((k) => {
+      fallen.push(k);
+      const el = document.createElement("span");
+      el.className = "fallen";
+      el.textContent = k;
+      desk.appendChild(el);
+      setTimeout(() => el.classList.add("is-in"), 20);
+    });
+    while (desk.children.length > 4) desk.removeChild(desk.firstElementChild);
+  }
+  // a miss inserts; a hit leaves the order alone
+  if (!hit && resident.length > CAP) resident = resident.slice(resident.length - CAP);
+  log.push({ n: at, key, hit, left });
+  paintTray(); paintQueue(); paintLedger(); paintTally();
+  hint.textContent = hit
+    ? `${key} was still in the box. That is a hit.`
+    : left
+      ? `${key} came in, ${left.split(":")[0]} went out (${left.split(":")[1]}).`
+      : `${key} came in. There was room.`;
+}
+
+function stop() {
+  clearInterval(timer); timer = 0;
+  $("play").textContent = "Play";
+}
+
+async function load(p) {
+  policy = p;
+  [...document.querySelectorAll(".chip")].forEach((b) =>
+    b.classList.toggle("is-on", b.dataset.policy === p));
+  reset();
+  if (!engine) return;
+  const raw = engine.mk_replay(p, CAP, TRACE_S);
+  steps = raw.split("\n").map((line) => {
+    const [key, state, left] = line.split("\t");
+    return { key, hit: state === "hit", left: left || "" };
+  });
+  WARM.forEach(() => { if (at < WARM.length) apply(steps[at]); });
+  hint.textContent = `The first four requests warmed the box. Press Step to send the scan.`;
+}
+
+function label(p) {
+  return p === "lru" ? "LRU" : p === "s3fifo" ? "S3-FIFO" : "W-TinyLFU";
+}
+
+$("step").addEventListener("click", () => {
+  if (at >= steps.length) { hint.textContent = "That is the whole trace. Reset to run it again."; return; }
+  apply(steps[at]);
+});
+
+$("play").addEventListener("click", () => {
+  if (timer) { stop(); return; }
+  if (at >= steps.length) reset();
+  $("play").textContent = "Pause";
+  timer = setInterval(() => {
+    if (at >= steps.length) { stop(); return; }
+    apply(steps[at]);
+  }, 620);
+});
+
+$("reset").addEventListener("click", reset);
+
+document.querySelectorAll(".chip").forEach((b) =>
+  b.addEventListener("click", () => load(b.dataset.policy)));
+
+const CUT_LEN = WARM.length + SCAN.length;
+
+function paintSurvey(rows) {
+  survey.innerHTML = "";
+  rows.forEach((row) => {
+    const col = document.createElement("div");
+    col.className = "col";
+    col.dataset.policy = row.policy;
+    const kept = HOT.filter((_, i) => row.held[i] === "1").length;
+    const pct = Math.round((kept / HOT.length) * 100);
+    col.innerHTML = `
+      <p class="col__policy">${label(row.policy)}</p>
+      <p class="col__hits"><b>${kept}</b> of ${HOT.length} kept &middot; ${row.hits} hits in ${CUT_LEN}</p>
+      <div class="bar"><i style="--w:${pct}%"></i></div>
+      <ul class="kept"></ul>`;
+    const list = col.querySelector(".kept");
+    HOT.forEach((name, i) => {
+      const li = document.createElement("li");
+      li.className = row.held[i] === "1" ? "yes" : "no";
+      li.innerHTML = `<span>${name}</span>${row.held[i] === "1" ? "still there" : "gone"}`;
+      list.appendChild(li);
+    });
+    survey.appendChild(col);
+  });
+}
+
+reset();
+
+try {
+  engine = await import("./engine/cache.js");
+  await load("tinylfu");
+  const rows = engine.mk_survey(CAP, CUT_S, HOT.join(",")).split("\n").map((line) => {
+    const [policy, hits, held] = line.split("\t");
+    return { policy, hits: Number(hits), held };
+  });
+  paintSurvey(rows);
+} catch (err) {
+  hint.textContent = "The compiled engine is not reachable here; serve the folder over HTTP.";
+  console.warn(err);
+}
+</script>
+</body>
+</html>

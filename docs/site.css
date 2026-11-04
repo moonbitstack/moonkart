@@ -30,8 +30,9 @@
   --page:min(1240px, calc(100% - 3rem));
 
   /* corrugated cross-section: two liners with a wave between them */
-  --flute:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='18'%3E%3Crect width='16' height='18' fill='%23a97f4d'/%3E%3Cpath d='M0 13.4 Q4 5 8 13.4 T16 13.4' fill='none' stroke='%23714e2a' stroke-width='1.4'/%3E%3Crect width='16' height='2.8' fill='%23e9cd9e'/%3E%3Crect y='15.4' width='16' height='2.6' fill='%23cfae7d'/%3E%3C/svg%3E");
-  --fluteV:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='26'%3E%3Crect width='22' height='26' fill='%23a97f4d'/%3E%3Cpath d='M16 0 Q7 6.5 16 13 T16 26' fill='none' stroke='%23714e2a' stroke-width='1.6'/%3E%3Crect width='2.8' height='26' fill='%23e9cd9e'/%3E%3Crect x='19.2' width='2.8' height='26' fill='%23cfae7d'/%3E%3C/svg%3E");
+  --flute:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='15'%3E%3Crect width='14' height='15' fill='%23a67c4a'/%3E%3Cpath d='M0 10.4 Q3.5 3.4 7 10.4 T14 10.4' fill='none' stroke='%236b4826' stroke-width='1.5'/%3E%3Crect width='14' height='2.8' fill='%23f0d6a7'/%3E%3Crect y='12.2' width='14' height='2.8' fill='%23c59a68'/%3E%3C/svg%3E");
+  --fluteV:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='24'%3E%3Crect width='22' height='24' fill='%23a67c4a'/%3E%3Cpath d='M6 0 Q2.2 6 6 12 T6 24' fill='none' stroke='%236b4826' stroke-width='1.6'/%3E%3Crect width='2.6' height='24' fill='%23f0d6a7'/%3E%3Crect x='19.2' width='2.8' height='24' fill='%23bd9060'/%3E%3C/svg%3E");
+  --fluteR:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='22'%3E%3Crect width='12' height='22' fill='%23a67c4a'/%3E%3Cpath d='M5.4 0 Q1.8 5.5 5.4 11 T5.4 22' fill='none' stroke='%236b4826' stroke-width='1.5'/%3E%3Crect width='2' height='22' fill='%23f0d6a7'/%3E%3Crect x='10' width='2' height='22' fill='%23bd9060'/%3E%3C/svg%3E");
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -58,9 +59,9 @@ body{
 /* the side walls: you are looking into the carton. The right one is wide enough
    to take the scroll groove, so the bar runs inside the board, not beside it. */
 .walls{position:fixed;inset:0;z-index:45;pointer-events:none}
-.walls i{position:absolute;top:0;bottom:0;left:0;width:22px;
+.walls i{position:absolute;top:0;bottom:0;left:0;width:22px;transform:scaleX(-1);
   background-image:linear-gradient(180deg,rgba(0,0,0,.4),rgba(0,0,0,0) 14%),var(--fluteV);
-  background-size:auto,22px 26px;background-repeat:no-repeat,repeat-y;
+  background-size:auto,22px 24px;background-repeat:no-repeat,repeat-y;
   box-shadow:inset -10px 0 12px -10px rgba(0,0,0,.85)}
 /* the right wall is the page's own edge board */
 .walls b{position:absolute;top:0;bottom:0;right:0;width:54px;
@@ -68,7 +69,7 @@ body{
   background-image:
     linear-gradient(90deg,rgba(0,0,0,.55),rgba(0,0,0,0) 26%,rgba(255,240,214,.16) 62%,rgba(0,0,0,.32)),
     var(--fluteV);
-  background-size:auto,22px 26px;background-repeat:no-repeat,repeat-y;
+  background-size:auto,22px 24px;background-repeat:no-repeat,repeat-y;
   box-shadow:inset 12px 0 14px -12px rgba(0,0,0,.9), inset 2px 0 0 rgba(255,240,214,.22)}
 /* the groove routed through that board; the bar rides in it, not beside it */
 .walls b::after{content:"";position:absolute;top:0;bottom:0;right:12px;width:15px;
@@ -102,7 +103,9 @@ html::-webkit-scrollbar{width:0;height:0;display:none}
 html.scrolling .rail__thumb{background-color:#e8c79c;cursor:grabbing}
 html.at-top .rail__thumb,html.at-end .rail__thumb{opacity:.92}
 
-.shell{position:relative;z-index:1;overflow-x:clip;
+/* The shell must not clip: every board's cut edge hangs 12px past its right side
+   and 15px under it. The body clips at the viewport, which is far enough out. */
+.shell{position:relative;z-index:1;
   width:min(1300px, calc(100% - 120px));margin:0 76px 0 44px;
   display:grid;gap:30px;padding:14px 0 58px}
 .shell > main{display:contents}
@@ -118,20 +121,22 @@ html.at-top .rail__thumb,html.at-end .rail__thumb{opacity:.92}
   box-shadow:
     inset 0 1px 0 rgba(255,246,225,.55),
     inset 0 -1px 0 rgba(109,74,41,.35),
+    inset -1px 0 0 rgba(109,74,41,.35),
     0 22px 34px -20px rgba(0,0,0,.85),
     0 4px 10px -6px rgba(0,0,0,.5);
   transform: rotate(var(--tilt,-.55deg));
 }
 /* the wave, seen edge-on: this is the whole point */
+/* The board has thickness on two sides: the near edge underneath and the right
+   edge, because the viewer stands a little to the left. Both are the same slice
+   of corrugated board, seen from two angles. */
 .panel::after{
   content:"";
-  position:absolute; left:0; right:0; bottom:-17px; height:18px;
-  background-image:var(--flute);
-  background-size:16px 18px;
-  background-repeat:repeat-x;
-  transform:perspective(300px) rotateX(38deg);
-  transform-origin:top center;
-  box-shadow:0 -1px 0 rgba(255,240,214,.3) inset, 0 3px 5px rgba(0,0,0,.55);
+  position:absolute; left:0; right:-12px; bottom:-15px; top:0;
+  background-image:var(--flute),var(--fluteR);
+  background-size:14px 15px,12px 22px;
+  background-repeat:repeat-x,repeat-y;
+  background-position:left bottom,right top;
   pointer-events:none;
   /* above the board's own drop shadow, or the shadow swallows the cut edge */
   z-index:1;
@@ -213,6 +218,11 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
 .facts{list-style:none;display:flex;flex-wrap:wrap;gap:6px 24px;margin:30px 0 0;padding:14px 0 0;
   border-top:1px dashed rgba(38,25,15,.3);font-family:var(--neat);font-size:18px;color:var(--ink-2)}
 .facts b{font-family:var(--neat);font-weight:700;font-size:22px;color:var(--ink);margin-right:4px}
+/* the three handling marks every carton carries */
+.marks{display:flex;gap:9px;margin:26px 0 0;color:var(--ink);opacity:.42}
+.marks svg{width:27px;height:27px;padding:3.5px;stroke:currentColor;fill:none;
+  stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round;
+  border:1px solid color-mix(in srgb,var(--ink) 60%,transparent);border-radius:1px}
 
 /* --- the demo: a box on the desk --- */
 .demo{position:relative;z-index:3;margin-top:clamp(6px,2vw,26px);
@@ -442,3 +452,107 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 .api__none{color:var(--ink-3);font-style:italic}
 .api__h{font-family:var(--hand);font-weight:700;font-size:22px;margin:22px 0 4px}
 .api__h:first-of-type{margin-top:8px}
+
+/* --- inside: the trace, drawn ---------------------------------- */
+.inside{padding:clamp(22px,2.6vw,34px) clamp(20px,2.4vw,34px) clamp(18px,2.2vw,28px)}
+.inside__head{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-start;justify-content:space-between}
+.inside__h{font-family:var(--hand);font-weight:700;font-size:clamp(30px,3.4vw,42px);
+  line-height:1.02;margin:2px 0 8px;color:var(--ink)}
+.inside__lede{margin:0;max-width:56ch;color:var(--ink-2);font-size:17.5px;line-height:1.6}
+.kicker__n{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--ink-3);
+  text-transform:uppercase}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-family:var(--neat);font-size:17px;color:var(--ink-2);background:transparent;
+  border:1.4px solid rgba(38,25,15,.28);border-radius:2px;padding:5px 12px 6px;cursor:pointer;
+  transition:background-color .15s,color .15s,border-color .15s}
+.chip:hover{background:rgba(38,25,15,.07);color:var(--ink)}
+.chip.is-on{background:#241a10;border-color:#241a10;color:#f6ecda}
+
+.inside__bar{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;
+  margin:18px 0 16px;padding-top:14px;border-top:1px dashed rgba(38,25,15,.28)}
+.transport{display:flex;gap:8px}
+.act{font-family:var(--neat);font-size:17px;color:var(--ink);background:rgba(36,26,16,.06);
+  border:1.4px solid rgba(38,25,15,.3);border-radius:2px;padding:6px 16px 8px;cursor:pointer;
+  transition:background-color .14s,transform .14s,box-shadow .14s}
+.act:hover{background:rgba(36,26,16,.12);transform:translateY(-1px)}
+.act--ink{background:#241a10;color:#f6ecda;border-color:#241a10;box-shadow:0 2px 0 #0d0805}
+.act--ink:hover{background:#3a2b1c}
+.tally-line{margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--ink-3)}
+
+.inside__grid{display:grid;grid-template-columns:168px minmax(0,1fr) 258px;gap:22px;align-items:start}
+.col__tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 8px;display:flex;justify-content:space-between;gap:8px}
+.col__tag span{color:var(--ink-2)}
+
+.queue{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:250px;overflow:hidden}
+.qslip{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);
+  background:rgba(247,236,214,.55);border:1px solid rgba(38,25,15,.18);border-radius:1px;
+  padding:3px 8px;transition:opacity .25s,background-color .25s,color .25s}
+.qslip--hot{color:var(--ink);background:rgba(247,236,214,.95);border-color:rgba(38,25,15,.3)}
+.qslip.is-done{opacity:.24}
+.qslip.is-now{background:#241a10;color:#f6ecda;border-color:#241a10;opacity:1}
+
+.tray2{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));height:150px;
+  background:linear-gradient(178deg,rgba(52,34,18,.9),rgba(74,50,28,.85));
+  border:1px solid rgba(38,25,15,.5);border-radius:2px;overflow:hidden;
+  box-shadow:inset 0 8px 14px -8px rgba(0,0,0,.9), inset 0 -2px 0 rgba(255,236,200,.12)}
+.pocket{position:relative;display:flex;align-items:flex-end;justify-content:center;
+  padding:0 5px 14px;border-right:1px solid rgba(255,236,200,.16)}
+.pocket::after{content:"";position:absolute;left:0;right:0;bottom:0;height:8px;
+  background:linear-gradient(180deg,rgba(255,236,200,0),rgba(255,236,200,.10));
+  border-top:1px solid rgba(255,236,200,.10)}
+.pocket:last-child{border-right:none}
+.pocket::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background-image:var(--fluteV);background-size:4px 24px;background-repeat:repeat-y;opacity:.5}
+.pocket:first-child::before{display:none}
+.pslip{font-family:var(--neat);font-weight:400;font-size:17px;line-height:1;color:#241a10;
+  background:linear-gradient(172deg,#fdf4e2,#eeddbd);border:1px solid #b99a6f;border-radius:1px;
+  padding:12px 9px 13px;min-width:64px;text-align:center;transform:rotate(-2deg);box-shadow:0 2px 0 rgba(20,12,4,.5),0 6px 10px -8px rgba(0,0,0,.9);
+  animation:dip .32s cubic-bezier(.2,1.1,.4,1) both;max-width:100%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.pocket.is-hot .pslip{background:linear-gradient(172deg,#fff8e8,#f4e5c4);box-shadow:0 2px 0 rgba(20,12,4,.5),0 0 0 2px rgba(168,52,42,.35)}
+@keyframes dip{from{transform:translateY(-14px) rotate(-2deg);opacity:0}to{transform:translateY(0) rotate(-2deg);opacity:1}}
+
+.deskrow{display:flex;gap:6px;margin-top:10px;min-height:34px;align-items:flex-start}
+.fallen{font-family:var(--neat);font-size:14px;color:#2a1c10;background:rgba(246,232,204,.85);
+  border:1px solid rgba(38,25,15,.28);border-radius:1px;padding:5px 9px 6px;transform:rotate(-6deg);
+  opacity:0;transition:opacity .4s,transform .4s}
+.fallen.is-in{opacity:.85;transform:rotate(-4deg)}
+
+.inside__hint{margin:12px 0 0;font-family:var(--neat);font-size:16.5px;line-height:1.4;color:var(--ink-2);
+  min-height:2.4em}
+
+.ledger{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.led{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-family:var(--mono);
+  font-size:11px;color:var(--ink-2);padding:3px 6px;border-radius:1px}
+.led--hit{background:rgba(38,25,15,.07)}
+.led__n{color:var(--ink-3);font-size:10px}
+.led__k{color:var(--ink);min-width:44px}
+.led__v{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.led--hit .led__v{color:#2f5f3a}
+.led em{flex-basis:100%;font-family:var(--neat);font-size:14px;font-style:normal;color:#8a2f26;
+  padding-left:26px}
+
+.survey{margin-top:0;padding:clamp(20px,2.4vw,30px) clamp(20px,2.4vw,30px)}
+.survey__head h2{font-family:var(--hand);font-weight:700;font-size:clamp(26px,3vw,34px);line-height:1.05;margin:0 0 6px}
+.survey__head p{margin:0 0 18px;color:var(--ink-2);font-size:17px;max-width:60ch}
+.survey__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.survey .col{padding:14px 14px 12px;background:rgba(247,236,214,.45);
+  border:1px solid rgba(38,25,15,.2);border-radius:2px;box-shadow:0 2px 0 rgba(150,118,76,.25)}
+.survey .col[data-policy="tinylfu"]{background:rgba(247,236,214,.8);border-color:rgba(38,25,15,.34)}
+.col__policy{font-family:var(--hand);font-weight:700;font-size:21px;margin:0 0 2px}
+.col__hits{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin:0 0 8px}
+.col__hits b{font-size:19px;color:var(--ink);font-family:var(--neat)}
+.bar{height:5px;background:rgba(38,25,15,.14);border-radius:1px;overflow:hidden;margin:0 0 10px}
+.bar i{display:block;height:100%;width:var(--w);background:linear-gradient(90deg,#a8342a,#c25a3f)}
+.kept{list-style:none;margin:0;padding:0;display:grid;gap:2px;font-family:var(--neat);font-size:15px}
+.kept li{display:flex;justify-content:space-between;gap:8px;color:var(--ink-2)}
+.kept .yes{color:var(--ink)}
+.kept .yes::after{content:"";}
+.kept .no{color:#8a2f26;opacity:.85}
+
+@media (width <= 1100px){
+  .inside__grid{grid-template-columns:minmax(0,1fr)}
+  .queue{grid-template-columns:repeat(auto-fill,minmax(54px,1fr));max-height:none}
+  .survey__grid{grid-template-columns:minmax(0,1fr)}
+}
