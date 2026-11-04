@@ -481,22 +481,26 @@ function put(key, value) {
   paint();
 }
 
-/* Taking a card: it comes out of the box and is held up, then goes back. */
-let heldTimer = null;
+/* Taking a card: it comes out of the box and is held up, then goes back into
+   its own place in the fan. Only one is ever held at a time. */
+function sendHome(el) {
+  clearTimeout(el._home);
+  el.classList.remove("is-drawn");
+  el._home = setTimeout(() => {
+    if (el.parentElement !== heldEl) return;
+    const seat = el._seat;
+    cardsEl.insertBefore(el, seat && seat.parentElement === cardsEl ? seat : null);
+  }, 300);
+}
+
 function takeCard(el) {
   if (el.parentElement === heldEl) return;
-  const home = el.nextSibling;
+  for (const other of [...heldEl.children]) sendHome(other);
+  el._seat = el.nextSibling;
   heldEl.appendChild(el);
   el.classList.add("is-drawn");
-  clearTimeout(heldTimer);
-  heldTimer = setTimeout(() => {
-    el.classList.remove("is-drawn");
-    setTimeout(() => {
-      if (el.parentElement !== heldEl) return;
-      /* back into its own place in the fan, not on top of the others */
-      cardsEl.insertBefore(el, home && home.parentElement === cardsEl ? home : null);
-    }, 300);
-  }, 780);
+  clearTimeout(el._home);
+  el._home = setTimeout(() => sendHome(el), 780);
 }
 
 function ask(key, el) {
