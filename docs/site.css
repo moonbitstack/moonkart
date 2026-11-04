@@ -215,7 +215,8 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
 .facts b{font-family:var(--neat);font-weight:700;font-size:22px;color:var(--ink);margin-right:4px}
 
 /* --- the demo: a box on the desk --- */
-.demo{position:relative;z-index:3;margin-top:clamp(6px,2vw,26px)}
+.demo{position:relative;z-index:3;margin-top:clamp(6px,2vw,26px);
+  padding-bottom:clamp(8px,1.6vw,18px)}
 .stage{position:relative;width:100%;aspect-ratio:1/1;
   filter:drop-shadow(0 26px 26px rgba(0,0,0,.55)) drop-shadow(0 46px 60px rgba(0,0,0,.5))}
 .stage svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
@@ -260,13 +261,14 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
   100%{box-shadow:0 2px 0 rgba(150,118,76,.35),0 8px 14px -10px rgba(0,0,0,.8)}
 }
 
-.readout{position:absolute;right:-6%;bottom:2%;width:27%;min-width:138px;
+.readout{position:absolute;right:1.5%;bottom:2.5%;width:26%;min-width:134px;
   background:linear-gradient(174deg,#f2de92,#e4c969);
   padding:10px 12px 12px;transform:rotate(2.2deg);
   box-shadow:0 2px 0 rgba(160,130,60,.55),0 14px 20px -16px rgba(0,0,0,.9);
   font-family:var(--mono);font-size:10px;color:#4a3a1c;z-index:4}
 .readout::before{content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%) rotate(-2deg);
-  width:52px;height:16px;background:rgba(255,255,255,.45);border:1px solid rgba(160,140,90,.3)}
+  width:52px;height:15px;background:rgba(250,242,220,.62);
+  border:1px solid rgba(160,140,90,.34);box-shadow:0 1px 2px rgba(60,38,16,.25)}
 .readout dl{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin:0}
 .readout dt{opacity:.72}
 .readout dd{margin:0;font-weight:600;color:#2b2110}
@@ -286,7 +288,7 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
 .slip:active{transform:translateY(0)}
 .slip span{font-family:var(--mono);font-size:9.5px;color:#8a6d47;font-weight:400}
 .slip[data-used]{opacity:.32;pointer-events:none}
-.tray__hint{width:100%;text-align:center;font-family:var(--neat);font-size:18px;color:#c3a276;margin:4px 0 0}
+.tray__hint{width:100%;text-align:center;font-family:var(--neat);font-size:18px;color:var(--ink-3);margin:6px 0 0}
 
 .scribble{position:absolute;right:5%;top:9%;margin:0;font-family:var(--hand);
   font-weight:700;font-size:18px;line-height:1.05;color:var(--pen);transform:rotate(-3deg);
