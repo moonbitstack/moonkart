@@ -3,18 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>moonkart — a cache for MoonBit</title>
+<title>moonkart &mdash; a cache for MoonBit</title>
 <meta name="description" content="A cache for MoonBit: bounded by count or weight, expirable on a clock you control, with W-TinyLFU, LRU and S3-FIFO.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23c9a678'/%3E%3Cpath d='M5 12 16 6l11 6v14l-11 6-11-6z' fill='%23e0c69e' stroke='%236b4a2f' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M5 12l11 6 11-6M16 18v14' stroke='%236b4a2f' stroke-width='1.6' fill='none' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@300;400;700&family=Permanent+Marker&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./site.css">
+<script src="./shell.js" defer></script>
 </head>
 <body>
 <div class="lamp" aria-hidden="true"></div>
 <div class="grain" aria-hidden="true"></div>
-<div class="walls" aria-hidden="true"><i></i><i></i></div>
+<div class="walls" aria-hidden="true"><i></i><b></b></div>
+<div class="rail" aria-hidden="true"><span class="rail__thumb"></span></div>
 <div class="shell">
 
 <header class="bar panel">
@@ -29,10 +31,7 @@
   <nav class="nav" aria-label="Main">
     <a href="./guide.html">Guide</a>
     <a href="./api.html">API</a>
-    <a href="https://github.com/moonbitstack/moonkart">
-      <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-      <span>GitHub</span>
-    </a>
+    <a href="https://github.com/moonbitstack/moonkart">GitHub</a>
   </nav>
 </header>
 
@@ -42,9 +41,8 @@
     <div class="hero__copy">
       <p class="kicker">A cache for MoonBit</p>
       <h1 class="title">moonkart
-        <svg viewBox="0 0 330 12" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M3 8.4c44-2.2 88-3 132-2 40 1 80 2.8 120 1.4 26-.8 52-2.2 72-3.6"/>
-          <path d="M26 10.8c36-1.4 72-2 108-1.4" opacity=".45"/>
+        <svg viewBox="0 0 330 10" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M5 7.1c46-2.9 93-3.7 139-2.6 40 .9 79 2.1 122 .5"/>
         </svg>
       </h1>
       <p class="lede">Put a value in. Ask for it later. When the box is full, it
@@ -114,15 +112,31 @@
 
           <path d="M260 256v140" stroke="#6d4a29" stroke-width="2.3"/>
 
-          <!-- tape folded round the corner: one leg per face, creased at the edge -->
-          <g opacity=".92">
-            <polygon points="260,306 260,327 207,294 207,273" fill="rgba(250,240,218,.26)"/>
-            <polygon points="260,306 260,327 306,282 306,261" fill="rgba(246,234,208,.22)"/>
-            <path d="M207 273 207 294 260 327" fill="none" stroke="rgba(255,252,240,.20)" stroke-width=".6"/>
-            <path d="M306 261 306 282 260 327" fill="none" stroke="rgba(255,252,240,.18)" stroke-width=".6"/>
-            <path d="M260 306V327" stroke="rgba(255,252,240,.16)" stroke-width=".7"/>
-            <path d="M209 275 259 305" stroke="rgba(255,255,255,.16)" stroke-width=".5"/>
-            <path d="M304 263 262 305" stroke="rgba(255,255,255,.13)" stroke-width=".5"/>
+          <!-- packing tape wrapped round the corner. Every edge keeps the slope of
+               the face it lies on (8 in 15) and both legs sit the same distance
+               under the rim, so the strip cannot drift off the box. Clear tape on
+               kraft is nearly invisible: it shows at its two edges and where the
+               paper under it darkens. -->
+          <g>
+            <!-- the film lifts the paper a hair: a soft shadow under its lower edge -->
+            <path d="M212.7 260.9 260 285.9 260 288.4 212.7 263.4Z" fill="rgba(74,46,20,.16)"/>
+            <path d="M260 285.9 306.6 261.2 306.6 263.7 260 288.4Z" fill="rgba(74,46,20,.13)"/>
+
+            <!-- left wall -->
+            <path d="M213 247.7 214.6 251.1 212.8 254.7 214.4 258 213 261 260 286.1 260 272.8Z"
+                  fill="rgba(92,62,30,.05)"/>
+            <path d="M213 247.7 260 272.8 260 273.9 213 248.8Z" fill="rgba(255,253,244,.30)"/>
+            <path d="M213 260 260 285.1 260 286.1 213 261Z" fill="rgba(56,34,14,.22)"/>
+
+            <!-- right wall: the same strip, turned away from the light -->
+            <path d="M306 248.3 304.2 251.8 306.3 255.4 304.6 258.9 306 261.6 260 286.1 260 272.8Z"
+                  fill="rgba(92,62,30,.07)"/>
+            <path d="M260 272.8 306 248.3 306 249.4 260 273.9Z" fill="rgba(255,253,244,.24)"/>
+            <path d="M260 285.1 306 260.6 306 261.6 260 286.1Z" fill="rgba(56,34,14,.24)"/>
+
+            <!-- the crease: the film bends, so its edge breaks at the corner -->
+            <path d="M260 272.8V286.1" stroke="rgba(56,34,14,.20)" stroke-width=".8"/>
+            <path d="M260.7 273.2V285.6" stroke="rgba(255,255,255,.16)" stroke-width=".5"/>
           </g>
 
           <!-- hand-written mark on the front wall -->
@@ -265,10 +279,6 @@ const forced = location.hash.slice(1);
 if (forced === "shout" || (forced !== "hand" && Math.random() < 0.2)) {
   root.classList.add("shout");
 }
-/* the scrollbar hides while the page sits at the top */
-const markTop = () => root.classList.toggle("at-top", scrollY === 0);
-addEventListener("scroll", markTop, { passive: true });
-markTop();
 
 const cardsEl = document.getElementById("cards");
 const trayEl = document.getElementById("tray");
