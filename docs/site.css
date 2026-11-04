@@ -71,37 +71,31 @@ body{
     var(--fluteV);
   background-size:auto,22px 24px;background-repeat:no-repeat,repeat-y;
   box-shadow:inset 12px 0 14px -12px rgba(0,0,0,.9), inset 2px 0 0 rgba(255,240,214,.22)}
-/* the groove routed through that board; the bar rides in it, not beside it */
-.walls b::after{content:"";position:absolute;top:0;bottom:0;right:12px;width:15px;
-  background:linear-gradient(90deg,#0b0602,#120a04 46%,#1a0f06);
-  box-shadow:inset 2px 0 4px -1px rgba(0,0,0,.95), inset 0 2px 8px -2px rgba(0,0,0,.95),
-    inset 0 -2px 8px -2px rgba(0,0,0,.95);
-  border-left:1px solid rgba(233,205,158,.55);
-  border-right:1px solid rgba(233,205,158,.16)}
-
-/* scrollbar: a strip of corrugated edge */
 /* the native bar is hidden: this one is a strip of board in the groove */
 html{scrollbar-width:none;-ms-overflow-style:none}
 html::-webkit-scrollbar{width:0;height:0;display:none}
 
-.rail{position:fixed;z-index:46;top:26px;bottom:26px;right:12px;width:15px;
+/* the bar is a length of clear tape stuck to the right wall, sliding with the page */
+.rail{position:fixed;z-index:46;top:8px;bottom:8px;right:10px;width:30px;
   pointer-events:auto;cursor:default}
 .rail[hidden]{display:none}
-.rail__thumb{position:absolute;left:0;width:15px;top:0;height:64px;
-  background-color:#cba376;
-  background-image:
-    linear-gradient(90deg, rgba(255,248,230,.72), rgba(255,248,230,.05) 42%, rgba(64,38,14,.42)),
-    repeating-linear-gradient(180deg, rgba(90,58,28,.16) 0 1px, transparent 1px 4px);
-  box-shadow:inset 0 0 0 1px rgba(64,38,14,.55), inset 1px 0 0 rgba(255,250,236,.55),
-    0 1px 3px rgba(0,0,0,.7);
+.rail__thumb{position:absolute;left:4px;width:21px;top:0;height:64px;
+  background:linear-gradient(94deg,
+    rgba(255,250,236,.42) 0%, rgba(252,243,222,.30) 34%,
+    rgba(244,232,206,.20) 70%, rgba(110,80,42,.16) 100%);
+  border-left:1.5px solid rgba(255,253,246,.62);
+  border-right:1px solid rgba(96,66,32,.2);
+  box-shadow:0 2px 4px -1px rgba(40,24,8,.34), inset 0 1px 0 rgba(255,253,246,.45),
+    inset 0 -1px 0 rgba(110,80,42,.22);
+  transform:rotate(.35deg);
   cursor:grab;touch-action:none}
-.rail__thumb::before,.rail__thumb::after{content:"";position:absolute;left:1px;right:1px;height:2px;
-  background:rgba(58,34,12,.35)}
-.rail__thumb::before{top:0}
-.rail__thumb::after{bottom:0}
-.rail:hover .rail__thumb{background-color:#dfba8c}
-html.scrolling .rail__thumb{background-color:#e8c79c;cursor:grabbing}
-html.at-top .rail__thumb,html.at-end .rail__thumb{opacity:.92}
+.rail:hover .rail__thumb{background:linear-gradient(94deg,
+    rgba(255,250,236,.42) 0%, rgba(252,243,222,.28) 38%,
+    rgba(244,232,206,.18) 72%, rgba(110,80,42,.16) 100%)}
+html.scrolling .rail__thumb{background:linear-gradient(94deg,
+    rgba(255,252,242,.52) 0%, rgba(252,245,226,.34) 38%,
+    rgba(244,232,206,.22) 72%, rgba(110,80,42,.18) 100%);
+  cursor:grabbing}
 
 /* The shell must not clip: every board's cut edge hangs 12px past its right side
    and 15px under it. The body clips at the viewport, which is far enough out. */
@@ -430,8 +424,8 @@ pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
 @media (width <= 620px){
   .walls b{width:40px}
   .walls b::after{right:9px;width:13px}
-  .rail{right:9px;width:13px;top:18px;bottom:18px}
-  .rail__thumb{width:13px}
+  .rail{right:8px;width:22px;top:8px;bottom:8px}
+  .rail__thumb{left:2px;width:18px}
   .shell{width:calc(100% - 74px);margin:0 48px 0 26px}
 }
 @media (width <= 940px){
