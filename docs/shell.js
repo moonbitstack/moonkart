@@ -84,3 +84,48 @@
   if (document.fonts) document.fonts.ready.then(place);
   place();
 })();
+
+// The table of contents ticks whichever step is under the reading line. It is a
+// reading aid, not navigation, so it stays quiet until the page moves.
+(() => {
+  const toc = document.querySelector(".toc");
+  if (!toc) return;
+  const links = [...toc.querySelectorAll('a[href^="#"]')];
+  const stops = links
+    .map((a) => document.getElementById(a.getAttribute("href").slice(1)))
+    .filter(Boolean);
+  if (!stops.length) return;
+
+  let here = null;
+  function mark() {
+    let found = stops[0];
+    for (const el of stops) {
+      if (el.getBoundingClientRect().top <= 150) found = el;
+    }
+    if (found === here) return;
+    here = found;
+    for (const a of links) {
+      const on = a.getAttribute("href") === "#" + found.id;
+      a.classList.toggle("is-here", on);
+      if (on) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    }
+  }
+
+  let queued = false;
+  addEventListener(
+    "scroll",
+    () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        mark();
+      });
+    },
+    { passive: true },
+  );
+  addEventListener("resize", mark);
+  if (document.fonts) document.fonts.ready.then(mark);
+  mark();
+})();

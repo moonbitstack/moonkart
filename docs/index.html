@@ -10,6 +10,19 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Kalam:wght@300;400;700&family=Permanent+Marker&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./site.css">
+<script>
+/* The box is sealed on arrival. It stays open while you move around the site and
+   is sealed again by a reload: the state lives in sessionStorage, and a reload is
+   the one navigation that puts it back. */
+(function () {
+  try {
+    var k = "moonkart:lid";
+    var nav = performance.getEntriesByType && performance.getEntriesByType("navigation")[0];
+    if (nav && nav.type === "reload") sessionStorage.removeItem(k);
+    if (sessionStorage.getItem(k) === "open") document.documentElement.dataset.lid = "open";
+  } catch (e) {}
+})();
+</script>
 <script src="./shell.js" defer></script>
 </head>
 <body>
@@ -29,6 +42,7 @@
     <span class="ticket__no"><b>HANDLE WITH CARE</b>no. 128 / moonbit</span>
   </a>
   <nav class="nav" aria-label="Main">
+    <a href="./index.html" aria-current="page">Home</a>
     <a href="./guide.html">Guide</a>
     <a href="./inside.html">Inside</a>
     <a href="./api.html">API</a>
@@ -51,6 +65,11 @@
       <div class="acts">
         <a class="btn btn--ink" href="./guide.html">Start with a box</a>
         <a class="btn btn--ghost" href="./api.html">Read the API</a>
+      </div>
+      <div class="get">
+        <span class="get__tag">or just</span>
+        <code class="get__cmd">moon add moonbitstack/moonkart</code>
+        <button class="get__copy" type="button" data-copy="moon add moonbitstack/moonkart">copy</button>
       </div>
       <p class="scribble">a cache, not a cart
         <svg class="doodle" width="34" height="30" viewBox="0 0 34 30" aria-hidden="true">
@@ -75,13 +94,13 @@
         <!-- back of the box: interior and far wall -->
         <svg class="layer-back" viewBox="96 82 328 328" aria-hidden="true">
           <defs>
-            <pattern id="ribL" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
-              <rect y="0" width="12" height="1.1" fill="rgba(90,58,28,.07)"/>
-              <rect y="6" width="12" height="1" fill="rgba(255,240,214,.06)"/>
+            <pattern id="ribL" width="13" height="13" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+              <rect y="0" width="13" height="1" fill="rgba(90,58,28,.026)"/>
+              <rect y="6.5" width="13" height="1" fill="rgba(255,240,214,.02)"/>
             </pattern>
-            <pattern id="ribR" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(-28)">
-              <rect y="0" width="12" height="1.1" fill="rgba(90,58,28,.09)"/>
-              <rect y="6" width="12" height="1" fill="rgba(255,240,214,.05)"/>
+            <pattern id="ribR" width="13" height="13" patternUnits="userSpaceOnUse" patternTransform="rotate(-28)">
+              <rect y="0" width="13" height="1" fill="rgba(90,58,28,.032)"/>
+              <rect y="6.5" width="13" height="1" fill="rgba(255,240,214,.018)"/>
             </pattern>
             <linearGradient id="in" x1=".2" y1="0" x2=".8" y2="1">
               <stop offset="0" stop-color="#5c4128"/>
@@ -96,6 +115,22 @@
             <linearGradient id="faceR" x1="0" y1="0" x2=".9" y2="1">
               <stop offset="0" stop-color="#d3b184"/>
               <stop offset="1" stop-color="#a97f4d"/>
+            </linearGradient>
+            <!-- the two lid flaps: the top face catches the most light -->
+            <linearGradient id="lidFar" x1=".05" y1="0" x2=".95" y2="1">
+              <stop offset="0" stop-color="#f3ddb8"/>
+              <stop offset=".62" stop-color="#e6cba1"/>
+              <stop offset="1" stop-color="#d8b98c"/>
+            </linearGradient>
+            <linearGradient id="lidNear" x1=".1" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#efd6ae"/>
+              <stop offset=".58" stop-color="#e2c69b"/>
+              <stop offset="1" stop-color="#d2b184"/>
+            </linearGradient>
+            <linearGradient id="flapCast" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#5a3610" stop-opacity=".52"/>
+              <stop offset=".45" stop-color="#5a3610" stop-opacity=".2"/>
+              <stop offset="1" stop-color="#5a3610" stop-opacity="0"/>
             </linearGradient>
           </defs>
           <path d="M260 96 410 176 260 256 110 176Z" fill="url(#in)"/>
@@ -112,10 +147,7 @@
           <path d="M260 256 410 176 410 316 260 396Z" fill="url(#faceR)" stroke="#6d4a29" stroke-width="2.1" stroke-linejoin="round"/>
           <path d="M260 256 410 176 410 316 260 396Z" fill="url(#ribR)" stroke="none"/>
 
-          <!-- the mouth: a ring of corrugated cut edge -->
-          <path d="M260 96 410 176 260 256 110 176Z M260 103 403 176 260 249 117 176Z"
-                fill="url(#fluteEdge)" fill-rule="evenodd" stroke="#6d4a29" stroke-width="1.2" stroke-linejoin="round"/>
-
+          <!-- the mouth is under the lid now; its cut edge goes on last -->
           <path d="M260 256v140" stroke="#6d4a29" stroke-width="2.3"/>
 
           <!-- packing tape wrapped round the corner. Every edge keeps the slope of
@@ -145,14 +177,16 @@
             <path d="M260.7 273.2V285.6" stroke="rgba(255,255,255,.16)" stroke-width=".5"/>
           </g>
 
-          <!-- hand-written mark on the front wall -->
+          <!-- hand-written mark, set low enough that the open flap clears it -->
           <g transform="rotate(-29.7 330 320)">
-            <text x="272" y="322" font-family="'Caveat',cursive" font-weight="700" font-size="34"
-                  fill="#5a3d22" opacity=".72">moonkart</text>
+            <text x="272" y="322" font-family="'Caveat',cursive" font-weight="700" font-size="32"
+                  fill="#5a3d22" opacity=".7">moonkart</text>
           </g>
 
-          <!-- shipping label -->
-          <g transform="translate(186 292) rotate(28)">
+          <!-- shipping label. It lies on the front-left wall, so the wall's own
+               shear (8 in 15 across, straight down) carries it — a skew, not a
+               turn. The last few degrees are the hand that stuck it on. -->
+          <g transform="translate(186 292) scale(.8824 1) skewX(28.07) rotate(-2.5)">
             <rect x="-46" y="-27" width="92" height="54" rx="1.5" fill="#f6ead2" stroke="#8a6a44" stroke-width="1.1"/>
             <text x="-37" y="-12" font-family="'JetBrains Mono',monospace" font-size="8" fill="#8a6a44" letter-spacing="1.2">MOONKART</text>
             <text x="35" y="-18" text-anchor="end" font-family="'JetBrains Mono',monospace" font-size="6.5" fill="#8a6a44" letter-spacing=".6">EE2</text>
@@ -170,7 +204,50 @@
               <rect x="30" y="12" width="1" height="10"/><rect x="33" y="12" width="2" height="10"/>
             </g>
           </g>
+
+          <!-- The lid: two flaps meeting on a seam, taped shut. `far` is the long one
+               that folds away behind the rim; `near` is the short one that swings
+               down the right wall. Both keep the slope of the edge they hang from. -->
+          <g class="lidwrap">
+            <g data-flap="far">
+              <polygon points="110 176 260 96 348.2 143.1 198.2 223.1"
+                       fill="url(#lidFar)" stroke="#6d4a29" stroke-width="1.6" stroke-linejoin="round"/>
+              <polygon points="110 176 260 96 348.2 143.1 198.2 223.1" fill="url(#ribL)" opacity=".8"/>
+            </g>
+            <g data-flap="near">
+              <!-- the shadow it throws on the wall and its own cut edge: both sit
+                   outside the flap, so the closed lid hides them on its own -->
+              <path class="flap__cast" fill="url(#flapCast)"/>
+              <path class="flap__edge" fill="url(#fluteEdge)" stroke="rgba(96,62,28,.5)" stroke-width=".6"/>
+              <g class="flap__body">
+                <polygon points="260 256 410 176 348.2 143.1 198.2 223.1"
+                         fill="url(#lidNear)" stroke="#6d4a29" stroke-width="1.6" stroke-linejoin="round"/>
+                <polygon points="260 256 410 176 348.2 143.1 198.2 223.1" fill="url(#ribR)" opacity=".7"/>
+              </g>
+            </g>
+            <g class="lid__seam">
+              <path d="M198.2 223.1 348.2 143.1" stroke="rgba(70,44,18,.42)" stroke-width="1.2"/>
+              <path d="M199.6 222 349.6 142" stroke="rgba(255,248,230,.22)" stroke-width="1"/>
+            </g>
+            <g class="lid__tape">
+              <polygon points="199.1 229.2 359.7 143.6 347.3 137 186.7 222.6"
+                       fill="rgba(255,250,238,.2)"/>
+              <path d="M199.1 229.2 359.7 143.6" stroke="rgba(255,255,255,.52)" stroke-width="1"/>
+              <path d="M186.7 222.6 347.3 137" stroke="rgba(64,40,16,.17)" stroke-width="1"/>
+            </g>
+            <!-- written on the lid, so it takes the lid's own two axes: along the
+                 seam, and away towards the back of the box -->
+            <text class="lid__note" x="0" y="0" transform="matrix(.8824 -.4706 .8824 .4706 250 232)"
+                  font-family="'Caveat',cursive" font-weight="700" font-size="17"
+                  fill="#8a5a3a" opacity=".78">click to open</text>
+          </g>
+
+          <!-- the rim goes on last: a ring of corrugated cut edge, above the lid -->
+          <path d="M260 96 410 176 260 256 110 176Z M260 103 403 176 260 249 117 176Z"
+                fill="url(#fluteEdge)" fill-rule="evenodd" stroke="#6d4a29" stroke-width="1.2" stroke-linejoin="round"/>
         </svg>
+
+        <button class="openlid" id="openlid" type="button" aria-label="Open the box"></button>
 
         <div class="readout" id="readout">
           <p class="tally">the counter</p>
@@ -223,7 +300,7 @@
 
   <section class="code">
     <div class="panel code__board">
-      <p class="label__tag" style="color:#6d4a29">THE SAME THREE CALLS, ON A BOX THAT HOLDS TWO</p>
+      <p class="label__tag">THE SAME THREE CALLS, ON A BOX THAT HOLDS TWO</p>
       <div class="label">
 <pre><code><span class="c-key">let</span> cache = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">2L</span>)
 cache.<span class="c-fn">set</span>(<span class="c-str">"a"</span>, <span class="c-num">1</span>)
@@ -422,6 +499,143 @@ if (engine) {
     seat(i);
   });
 }
+
+/* --- the lid --------------------------------------------------------------
+   The box arrives taped shut. One click cuts the tape: the near flap falls
+   down the right wall, the far one folds away behind the rim, and the cards
+   are there. It does not close again — the state goes to sessionStorage, and
+   the check in the head puts the seal back on a reload, not on a link. */
+const LID_KEY = "moonkart:lid";
+const lidWrap = document.querySelector(".lidwrap");
+const openBtn = document.getElementById("openlid");
+const flapNear = lidWrap.querySelector('[data-flap="near"]');
+const flapFar = lidWrap.querySelector('[data-flap="far"]');
+const tapeEl = lidWrap.querySelector(".lid__tape");
+const seamEl = lidWrap.querySelector(".lid__seam");
+const noteEl = lidWrap.querySelector(".lid__note");
+
+const SEALED = {
+  near: [[260, 256], [410, 176], [348.2, 143.1], [310.7, 163.1], [273.2, 183.1],
+         [235.7, 203.1], [198.2, 223.1]],
+  far: [[110, 176], [260, 96], [348.2, 143.1], [198.2, 223.1]],
+};
+/* the free edge bows when it hangs: a stiff flap never lies dead flat on the wall */
+const OPENED = {
+  near: [[260, 256], [410, 176], [410, 246], [372.5, 269], [335, 292],
+         [297.5, 309], [260, 326]],
+  far: [[110, 176], [260, 96], [309.2, 69.8], [159.1, 149.8]],
+};
+
+const writeShape = (g, pts) => {
+  const s = pts.map((p) => p[0].toFixed(2) + " " + p[1].toFixed(2)).join(" ");
+  for (const pg of g.querySelectorAll("polygon")) pg.setAttribute("points", s);
+  /* the cut edge of the flap and the shadow it lays on the wall travel with it,
+     and both follow the bow of the free edge */
+  const edge = pts.slice(2);
+  const band = (h) => {
+    const top = edge.map((p) => p[0].toFixed(2) + " " + p[1].toFixed(2));
+    const back = edge.slice().reverse().map((p) => p[0].toFixed(2) + " " + (p[1] + h).toFixed(2));
+    return "M" + top.join("L") + "L" + back.join("L") + "Z";
+  };
+  const cast = g.querySelector(".flap__cast");
+  if (cast) cast.setAttribute("d", band(21));
+  const cut = g.querySelector(".flap__edge");
+  if (cut) cut.setAttribute("d", band(4.5));
+};
+const mix = (a, b, t) => a + (b - a) * t;
+const blend = (from, to, t) =>
+  from.map((p, i) => [mix(p[0], to[i][0], t), mix(p[1], to[i][1], t)]);
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+/* a hinged flap swings fast, overshoots a little and settles on the wall */
+const swingEase = (t) => 1 - Math.pow(1 - t, 3) * Math.cos(t * 4.2);
+
+const lidOpen = () => root.dataset.lid === "open";
+
+if (lidOpen()) {
+  writeShape(flapNear, OPENED.near);
+} else {
+  trayEl.classList.add("is-locked");
+  if (engine) hintEl.textContent = "The box is taped shut. Click it to open.";
+}
+
+function dropCards() {
+  live.forEach((c, i) => {
+    c.el.style.setProperty("--d", i * 90 + "ms");
+    c.el.classList.remove("replay");
+    void c.el.offsetWidth;
+    c.el.classList.add("replay");
+  });
+}
+
+let cutting = false;
+function openLid() {
+  if (cutting || lidOpen()) return;
+  cutting = true;
+  try { sessionStorage.setItem(LID_KEY, "open"); } catch (e) {}
+  openBtn.disabled = true;
+  trayEl.classList.remove("is-locked");
+
+  /* the box still opens, it just does not perform */
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    writeShape(flapNear, OPENED.near);
+    root.dataset.lid = "open";
+    dropCards();
+    hintEl.textContent = "Click a card in the box to ask for it again.";
+    cutting = false;
+    return;
+  }
+
+  const t0 = performance.now();
+  const DUR = 1050;
+  let dropped = false;
+  const span = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+
+  const step = () => {
+    const t = Math.min(1, (performance.now() - t0) / DUR);
+    /* the seal goes first, in one tear, and the note with it */
+    tapeEl.style.opacity = String(1 - span(t, 0, 0.14));
+    noteEl.style.opacity = String(1 - span(t, 0, 0.09));
+    seamEl.style.opacity = String(1 - span(t, 0.05, 0.3));
+    /* the near flap swings down the right wall and settles */
+    writeShape(flapNear, blend(SEALED.near, OPENED.near, swingEase(span(t, 0.08, 0.94))));
+    /* the far one folds away behind the rim before you can watch it */
+    writeShape(flapFar, blend(SEALED.far, OPENED.far, easeOut(span(t, 0.08, 0.95))));
+    flapFar.style.opacity = String(1 - span(t, 0.25, 0.78));
+
+    if (!dropped && t > 0.46) {
+      dropped = true;
+      dropCards();
+      hintEl.textContent = "Click a card in the box to ask for it again.";
+    }
+    if (t < 1) return requestAnimationFrame(step);
+
+    writeShape(flapNear, OPENED.near);
+    flapFar.style.opacity = "0";
+    root.dataset.lid = "open";
+    cutting = false;
+  };
+  requestAnimationFrame(step);
+}
+
+openBtn.addEventListener("click", openLid);
+
+/* --- the install line --- */
+const copyBtn = document.querySelector(".get__copy");
+copyBtn.addEventListener("click", async () => {
+  let said = "copy";
+  try {
+    await navigator.clipboard.writeText(copyBtn.dataset.copy);
+    said = "copied";
+    copyBtn.classList.add("is-done");
+  } catch (e) {
+    said = "select it";
+  }
+  copyBtn.textContent = said;
+  setTimeout(() => {
+    copyBtn.textContent = "copy";
+    copyBtn.classList.remove("is-done");
+  }, 1600);
+});
 </script>
 </body>
 </html>
