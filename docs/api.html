@@ -43,6 +43,7 @@
       <li><a href="#moonkart">moonkart</a></li>
       <li><a href="#concurrent">concurrent</a></li>
       <li><a href="#policy">policy</a></li>
+      <li><a href="#disk">disk</a></li>
   </ol>
 </aside>
 
@@ -115,7 +116,7 @@
 <section class="chapter chapter--long panel" id="concurrent">
 <span class="chapter__eyebrow">moonbitstack/moonkart/concurrent</span>
 <h2>concurrent</h2>
-<p>The same cache behind an await, with loads coalesced per key.</p>
+<p>The same cache behind an await, with loads coalesced per key, and the same cache split over independent shards.</p>
 <h3 class="api__h">Functions and values</h3><dl class="api">
 <dt><code>let default_shards : Int32</code></dt>
 <dd>How many shards a cache gets when the caller does not say. Eight is enough that a busy key crowds out little else, and small enough that each shard still holds a working set worth keeping.</dd>
@@ -191,6 +192,12 @@
 <dt><code>fn Tinylfu::size(Self) -&gt; Int32</code></dt>
 <dd>W-TinyLFU policy: a small admission window feeds a segmented LRU (probation and protected) that is guarded by a frequency sketch keyed by the entry&#x27;s key hash, so often-read keys survive even after they age out of recency. This is the cache&#x27;s default strategy.</dd>
 </dl>
+</section>
+<section class="chapter chapter--long panel" id="disk">
+<span class="chapter__eyebrow">moonbitstack/moonkart/disk</span>
+<h2>disk</h2>
+<p>A memory cache and a bounded file behind it, for the native target.</p>
+<p>Native only, so the functions are not part of this generated reference. The readme's <i>Hybrid memory and disk</i> section is the reference for them.</p>
 </section>
 
   <nav class="pager">

@@ -17,11 +17,11 @@ PACKAGES = [
     ("moonbitstack/moonkart", "src", "moonkart",
      "The cache itself: constructors, reads and writes, expiry, invalidation, and the counters."),
     ("moonbitstack/moonkart/concurrent", "src/concurrent", "concurrent",
-     "The same cache behind an await, with loads coalesced per key."),
+     "The same cache behind an await, with loads coalesced per key, and the same cache split over independent shards."),
     ("moonbitstack/moonkart/policy", "src/policy", "policy",
      "Eviction policies. The cache sees them only through this contract, so a third-party policy plugs in without touching it."),
     ("moonbitstack/moonkart/disk", "src/disk", "disk",
-     "A memory cache with an append log behind it, for the native target."),
+     "A memory cache and a bounded file behind it, for the native target."),
 ]
 
 DOC_BLOCK = re.compile(r"((?:^[ \t]*///.*\n)+)", re.M)
@@ -137,13 +137,24 @@ def render() -> str:
                 (kind, name, sig, docs.get(name) or docs.get(owner, ""))
             )
 
+        heading = [f'<section class="chapter chapter--long panel" id="{anchor}">',
+                   f'<span class="chapter__eyebrow">{html.escape(module)}</span>',
+                   f'<h2>{html.escape(module.split("/")[-1])}</h2>',
+                   f'<p>{html.escape(blurb)}</p>']
         if not groups:
+            # A package whose files are all gated to one target has no interface
+            # to dump. Name it anyway, and say where its reference is.
+            toc.append(f'<li><a href="#{anchor}">{module.split("/")[-1]}</a></li>')
+            heading.append(
+                '<p>Native only, so the functions are not part of this generated '
+                'reference. The readme\'s <i>Hybrid memory and disk</i> section is '
+                'the reference for them.</p>'
+            )
+            heading.append("</section>")
+            body.append("\n".join(heading))
             continue
         toc.append(f'<li><a href="#{anchor}">{module.split("/")[-1]}</a></li>')
-        parts = [f'<section class="chapter chapter--long panel" id="{anchor}">',
-                 f'<span class="chapter__eyebrow">{html.escape(module)}</span>',
-                 f'<h2>{html.escape(module.split("/")[-1])}</h2>',
-                 f'<p>{html.escape(blurb)}</p>']
+        parts = list(heading)
         for section in ("Values", "Types", "Errors"):
             items = groups.get(section)
             if not items:
