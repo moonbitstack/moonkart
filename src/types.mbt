@@ -108,6 +108,21 @@ pub fn CacheStats::miss_rate(self : CacheStats) -> Double {
 }
 
 ///|
+/// Two sets of counters added together, for a cache split into shards or a
+/// report built from several caches.
+pub fn CacheStats::merge(self : CacheStats, other : CacheStats) -> CacheStats {
+  {
+    hit_count: self.hit_count + other.hit_count,
+    miss_count: self.miss_count + other.miss_count,
+    eviction_count: self.eviction_count + other.eviction_count,
+    eviction_weight: self.eviction_weight + other.eviction_weight,
+    load_success_count: self.load_success_count + other.load_success_count,
+    load_failure_count: self.load_failure_count + other.load_failure_count,
+    total_load_time: self.total_load_time + other.total_load_time,
+  }
+}
+
+///|
 /// An entry as seen by a reader: its value, weight and absolute expiry
 /// deadline (if any).
 pub(all) struct Entry[K, V] {
