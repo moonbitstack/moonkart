@@ -75,54 +75,78 @@
 </dl>
 <h3 class="api__h">Types and methods</h3><dl class="api">
 <dt><code>fn[K : Eq + Hash, V] Cache::contains(Self[K, V], K) -&gt; Bool</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Whether <code>key</code> is present and not expired. Expired entries are purged and report as absent. This is a presence check: it neither refreshes a time-to-idle deadline nor counts a hit.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::entry(Self[K, V], K) -&gt; Entry[K, V]</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Returns a snapshot of the entry for <code>key</code>. Panics if the key is absent or expired; prefer <code>entry_or_null</code> when absence is expected.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::entry_or_null(Self[K, V], K) -&gt; Entry[K, V]?</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Returns a snapshot of the entry for <code>key</code>, or <code>None</code>. The snapshot is a copy detached from the cache.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::get(Self[K, V], K) -&gt; V?</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
-<dt><code>fn[K : Eq + Hash, V, E : Error] Cache::get_with(Self[K, V], K, (K) -&gt; V raise E) -&gt; V raise E</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Returns the value for <code>key</code>, or <code>None</code> if absent or expired. A successful read counts a hit and bumps the entry&#x27;s recency; an expired or missing read counts a miss.</dd>
+<dt><code>fn[K : Eq + Hash, V, E : Error] Cache::get_with(Self[K, V], K, (K) -&gt; V raise E, expire_after? : Int64) -&gt; V raise E</code></dt>
+<dd>Returns the value for <code>key</code>. On a miss, runs <code>loader(key)</code> and stores the result. The loader may raise; a raised error is not cached, is counted as a load failure, and is handed to the caller unchanged. <code>expire_after</code> does to the loaded value what it does to <code><code>set</code></code>.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::invalidate(Self[K, V], K) -&gt; Bool</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Removes <code>key</code> explicitly (alias of <code>remove</code>). Returns whether it was present.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::invalidate_all(Self[K, V]) -&gt; Unit</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Removes every entry, reporting each to the removal listener as <code>Explicit</code>.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::invalidate_if(Self[K, V], (K, V) -&gt; Bool) -&gt; Int64</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Removes every entry for which <code>pred(key, value)</code> is true. Returns the number removed.</dd>
 <dt><code>fn[K, V] Cache::policy_size(Self[K, V]) -&gt; Int32</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Number of entries the eviction policy currently tracks (equals <code>size</code>).</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::remove(Self[K, V], K) -&gt; Bool</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
-<dt><code>fn[K : Eq + Hash, V] Cache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Removes <code>key</code> explicitly. Returns whether it was present.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::set(Self[K, V], K, V, expire_after? : Int64) -&gt; Unit</code></dt>
+<dd>Inserts or replaces <code>key</code>. A replaced value is reported to the removal listener as <code>Replaced</code>; an insertion calls <code>after_update</code> when the key was already present, otherwise <code>after_create</code>. <code>expire_after</code> fixes this entry&#x27;s deadline at <code>expire_after</code> nanoseconds from now, for this write only: the cache&#x27;s own rule does not apply to it, and a later read will not move the deadline it computed. Write the entry again without it to hand the entry back to the cache&#x27;s rule.</dd>
 <dt><code>fn[K, V] Cache::size(Self[K, V]) -&gt; Int64</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>Number of entries currently stored.</dd>
 <dt><code>fn[K, V] Cache::stats(Self[K, V]) -&gt; CacheStats</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>A copy of the running counters.</dd>
 <dt><code>fn[K, V] Cache::to_array(Self[K, V]) -&gt; Array[(K, V)]</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
-<dt><code>fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(Self[K, V], K, (K) -&gt; V? raise E) -&gt; V? raise E</code></dt>
-<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code><code>new</code></code> accepts a third-party policy without changing this type. The default strategy, chosen by <code><code>tinylfu_cache</code></code>, is W-TinyLFU; <code><code>lru_cache</code></code> and <code><code>s3fifo_cache</code></code> provide the other shipped strategies.</dd>
+<dd>A snapshot of every live entry as <code>(key, value)</code> pairs, in no particular order. Useful for persistence and for tests.</dd>
+<dt><code>fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(Self[K, V], K, (K) -&gt; V? raise E, expire_after? : Int64) -&gt; V? raise E</code></dt>
+<dd>Like <code>get_with</code>, but <code>loader</code> may return <code>None</code> to signal &quot;no value&quot;; such a result is not cached and <code>None</code> is returned. A raised error propagates to the caller and is counted as a load failure.</dd>
 <dt><code>fn CacheStats::hit_rate(Self) -&gt; Double</code></dt>
 <dd>Fraction of reads that hit, in <code>0.0 ..= 1.0</code>. Zero reads reports <code>0.0</code> rather than dividing by zero.</dd>
+<dt><code>fn CacheStats::merge(Self, Self) -&gt; Self</code></dt>
+<dd>Two sets of counters added together, for a cache split into shards or a report built from several caches.</dd>
 <dt><code>fn CacheStats::miss_rate(Self) -&gt; Double</code></dt>
-<dd>Fraction of reads that hit, in <code>0.0 ..= 1.0</code>. Zero reads reports <code>0.0</code> rather than dividing by zero.</dd>
+<dd>Fraction of reads that missed, in <code>0.0 ..= 1.0</code>.</dd>
 </dl>
 </section>
 <section class="chapter chapter--long panel" id="concurrent">
 <span class="chapter__eyebrow">moonbitstack/moonkart/concurrent</span>
 <h2>concurrent</h2>
 <p>The same cache behind an await, with loads coalesced per key.</p>
+<h3 class="api__h">Functions and values</h3><dl class="api">
+<dt><code>let default_shards : Int32</code></dt>
+<dd>How many shards a cache gets when the caller does not say. Eight is enough that a busy key crowds out little else, and small enough that each shard still holds a working set worth keeping.</dd>
+</dl>
 <h3 class="api__h">Types and methods</h3><dl class="api">
 <dt><code>fn[K : Eq + Hash, V] AsyncCache::get(Self[K, V], K) -&gt; V?</code></dt>
-<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dd>Reads <code>key</code>, or <code>None</code>.</dd>
 <dt><code>fn[K, V] AsyncCache::inner(Self[K, V]) -&gt; @moonkart.Cache[K, V]</code></dt>
-<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dd>The synchronous cache underneath, for callers that already hold it.</dd>
 <dt><code>fn[K : Eq + Hash, V] AsyncCache::new(@moonkart.Cache[K, V]) -&gt; Self[K, V]</code></dt>
-<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dd>Wraps a cache so it can be used from asynchronous code.</dd>
 <dt><code>fn[K : Eq + Hash, V] AsyncCache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
-<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dd>Inserts or replaces <code>key</code>.</dd>
+<dt><code>fn[K : Eq + Hash, V] ShardedCache::get(Self[K, V], K) -&gt; V?</code></dt>
+<dd>Reads <code>key</code> from the shard that holds it, or <code>None</code>.</dd>
+<dt><code>fn[K : Eq + Hash, V] ShardedCache::invalidate(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>Removes <code>key</code> from the shard that holds it. Returns whether it was present.</dd>
+<dt><code>fn[K : Eq + Hash, V] ShardedCache::invalidate_all(Self[K, V]) -&gt; Unit</code></dt>
+<dd>Removes every entry in every shard.</dd>
+<dt><code>fn[K : Eq + Hash, V] ShardedCache::new(make~ : (Int32) -&gt; @moonkart.Cache[K, V], shards? : Int32) -&gt; Self[K, V]</code></dt>
+<dd>Builds <code>shards</code> caches. <code>make</code> is called once per shard with that shard&#x27;s index, so each one can be bounded and tuned on its own.</dd>
+<dt><code>fn[K : Eq + Hash, V] ShardedCache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
+<dd>Inserts or replaces <code>key</code> in the shard that holds it.</dd>
+<dt><code>fn[K : Hash, V] ShardedCache::shard_of(Self[K, V], K) -&gt; Int32</code></dt>
+<dd>The index of the shard <code>key</code> belongs to.</dd>
+<dt><code>fn[K, V] ShardedCache::shards(Self[K, V]) -&gt; Int32</code></dt>
+<dd>How many shards this cache is split into.</dd>
+<dt><code>fn[K, V] ShardedCache::size(Self[K, V]) -&gt; Int64</code></dt>
+<dd>Number of entries held across all shards.</dd>
+<dt><code>fn[K, V] ShardedCache::stats(Self[K, V]) -&gt; @moonkart.CacheStats</code></dt>
+<dd>The counters of every shard added together.</dd>
 </dl>
 </section>
 <section class="chapter chapter--long panel" id="policy">

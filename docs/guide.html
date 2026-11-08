@@ -100,6 +100,8 @@ by_weight.<span class="c-fn">set</span>(<span class="c-str">"bar"</span>, <span 
     <p><code>ttl</code> counts from the moment an entry is written; <code>tti</code> counts from
       its last read. For anything else &mdash; a deadline that depends on the value, or one that only
       some entries get &mdash; pass an <code>Expiry</code> with your own callbacks.</p>
+    <p>A single write can carry its own deadline instead: <code>expire_after</code> outranks the
+      cache's rule, and no read moves it.</p>
     <p>The clock is a parameter. Nothing in the library reads the wall clock, so a test moves a
       number instead of sleeping.</p>
     <div class="label">
@@ -109,15 +111,16 @@ by_weight.<span class="c-fn">set</span>(<span class="c-str">"bar"</span>, <span 
   expiry=<span class="c-pkg">@moonkart</span>.<span class="c-fn">ttl</span>(<span class="c-num">10L</span>),
   clock=<span class="c-key">fn</span>() { now.val },
 )
-timed.<span class="c-fn">set</span>(<span class="c-str">"user:7"</span>, <span class="c-str">"Vega"</span>)
-<span class="c-fn">println</span>(<span class="c-str">"at t=0:  \{timed.contains("user:7")}"</span>)
+timed.<span class="c-fn">set</span>(<span class="c-str">"user:7"</span>, <span class="c-str">"Vega"</span>)                    <span class="c-com">// the cache's 10</span>
+timed.<span class="c-fn">set</span>(<span class="c-str">"user:9"</span>, <span class="c-str">"Nova"</span>, expire_after=<span class="c-num">20L</span>)  <span class="c-com">// its own 20</span>
+<span class="c-fn">println</span>(<span class="c-str">"at t=0:  \{timed.contains("user:7")} \{timed.contains("user:9")}"</span>)
 now.val = <span class="c-num">11L</span>
-<span class="c-fn">println</span>(<span class="c-str">"at t=11: \{timed.contains("user:7")}"</span>)</code></pre>
+<span class="c-fn">println</span>(<span class="c-str">"at t=11: \{timed.contains("user:7")} \{timed.contains("user:9")}"</span>)</code></pre>
     </div>
     <div class="out panel">
       <p class="out__tag">WHAT IT PRINTS</p>
-<pre>at t=0:  <b>true</b>
-at t=11: <b>false</b></pre>
+<pre>at t=0:  <b>true true</b>
+at t=11: <b>false true</b></pre>
     </div>
   </section>
 
@@ -168,7 +171,8 @@ at t=11: <b>false</b></pre>
     </div>
     <div class="note"><span><b>Concurrent readers.</b> In <code>@moonkart/concurrent</code>, readers of
       the same key share one loader. When it fails they all receive that error, and nothing is
-      cached, so the next call tries again.</span></div>
+      cached, so the next call tries again. <code>ShardedCache</code> splits the key space over
+      independent caches, so traffic in one shard cannot evict another's entries.</span></div>
   </section>
 
   <section class="chapter panel" id="count">

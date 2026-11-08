@@ -60,6 +60,8 @@ fn sessions(clock : () -> Int64) -> @moonkart.Cache[String, Bytes] {
 
 `ttl(ns)` counts from the write and is not extended by reads; `tti(ns)` restarts on every read. The `Expiry` record takes per-entry callbacks for anything else.
 
+One write can carry its own deadline instead: `cache.set(key, value, expire_after=ns)`, and `get_with(key, loader, expire_after=ns)` for a loaded value. Such a deadline outranks the cache's rule and no read moves it.
+
 ## Remember a function
 
 ```moonbit
@@ -73,10 +75,26 @@ The generator adds `price_of_cached(sku)` beside the function, which reads throu
 `ttl` and `tti` take durations such as `250ms`, `60s`, `5m`, `1h`. The function must not raise. Enable it with a `dev_build` rule in `moon.mod` and a
 `dev_build(rule: "cached", input: "...", output: "...")` line in `moon.pkg`; see the repository's `src/examples/03-cached` for both files.
 
+Next to it, `#kart.count_calls` adds `price_of_cached_calls()`, which counts how many times the function ran. `#kart.once` is for a value that never changes: it takes no arguments and generates `name_once()` with no way to clear it.
+
+```moonbit
+#kart.cached
+#kart.count_calls
+pub fn ratio(a : Int, b : Int) -> Double {
+  a.to_double() / b.to_double()
+}
+
+#kart.once
+pub fn revision() -> String {
+  "3f9c1ab"
+}
+```
+
 ## Things that catch people out
 
 - The cache reads no clock unless you give it one: expiry needs `clock`, a nanosecond reading. `system_clock` is there for production; tests pass their own and never sleep.
 - `removal_listener` hears every entry that leaves, with the reason: `Capacity`, `Expired`, `Explicit` or `Replaced`. `stats()` gives hits, misses and their rates.
 - A weight-bounded cache needs both `max_weight` and a `weigher`; `cap` and `max_weight` are alternatives.
+- `@concurrent.ShardedCache` splits the key space over independent caches with their own budgets. It keeps unrelated traffic from evicting your entries; it does not add parallelism by itself.
+- The disk tier is native only, in `moonbitstack/moonkart/disk`. `max_bytes` bounds the file's live records, a read that misses memory is served from the file and put back, and `stats()` reports promotions, evictions and refusals. Run `compact()` now and then, or the file keeps its dead records.
 - TinyLFU's frequency sketch is keyed by the runtime's hash seed, so its hit rate moves by a few tenths of a point between seeds; the recency policies do not.
-- The disk tier is native only, in `moonbitstack/moonkart/disk`.

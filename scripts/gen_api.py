@@ -27,7 +27,7 @@ PACKAGES = [
 DOC_BLOCK = re.compile(r"((?:^[ \t]*///.*\n)+)", re.M)
 DECL = re.compile(
     r"^[ \t]*(?:pub[ \t]+)?(?:fn|struct|enum|let)(?:[ \t]+|(?=\[))"
-    r"(?:\[[^\]]*\][ \t]*)?([A-Za-z_][A-Za-z0-9_]*)",
+    r"(?:\[[^\]]*\][ \t]*)?([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)?)",
     re.M,
 )
 
@@ -57,7 +57,8 @@ def collect_docs(directory: pathlib.Path) -> dict:
             if not lines:
                 continue
             name = decl.group(1)
-            # a method doc (`Cache::members`) is keyed by the bare name too
+            # `Cache::get` keeps its own entry, so a method is not described by
+            # the paragraph above its type.
             found.setdefault(name, " ".join(lines))
     return found
 
@@ -132,7 +133,9 @@ def render() -> str:
         for section, kind, name, sig in parse_mbti(mbti):
             owner = name.split("::")[0]
             key = "Types" if "::" in name else section
-            groups.setdefault(key, []).append((kind, name, sig, docs.get(owner, "")))
+            groups.setdefault(key, []).append(
+                (kind, name, sig, docs.get(name) or docs.get(owner, ""))
+            )
 
         if not groups:
             continue

@@ -150,6 +150,29 @@ assert_eq(tti_cache.contains("session"), false)
 `after_read` and `after_update` callbacks compute a deadline per entry, so a
 rule can depend on the value or apply to only some keys.
 
+A single write can also carry its own deadline, which then outranks the rule:
+
+```moonbit
+let fixed_now : @ref.Ref[Int64] = @ref.Ref(0L)
+let mixed = @moonkart.lru_cache(
+  cap=100,
+  expiry=@moonkart.ttl(1_000L),
+  clock=fn() { fixed_now.val },
+)
+mixed.set("short", "lived", expire_after=10L) // ten nanoseconds from now
+mixed.set("long", "lived") // the cache's rule
+assert_eq(mixed.entry("short").expire_at, Some(10L))
+assert_eq(mixed.entry("long").expire_at, Some(1_000L))
+
+fixed_now.val = 11L
+assert_eq(mixed.contains("short"), false)
+assert_eq(mixed.contains("long"), true)
+```
+
+A deadline fixed that way is not moved by a read, even on a time-to-idle cache,
+and writing the entry again without `expire_after` hands it back to the rule.
+`get_with` and `try_get_with` take the same parameter for the value they load.
+
 ## Loading
 
 `get_with` runs a loader only on a miss and stores its result. The loader may
@@ -202,17 +225,34 @@ and the generator adds a remembering one beside it:
 
 ```moonbit
 #kart.cached(capacity="1024", policy="lru", ttl="60s")
+#kart.count_calls
 pub fn lookup(id : Int) -> String {
   "item-\{id}"
 }
 ```
 
-`lookup_cached(id)` reads through the cache and `lookup_cached_clear()` empties
-it. The parameters are the key, several of them a tuple. `capacity` is 128 when
-nothing says, `policy` is `tinylfu`, `lru` or `s3fifo`, `ttl` and `tti` are
-durations such as `250ms`, `60s`, `5m` or `1h`, and `name` renames the function.
-An `async fn` goes through the asynchronous cache. A function that raises is
-refused, since there is nothing to keep when it does.
+`lookup_cached(id)` reads through the cache, `lookup_cached_clear()` empties it,
+and `lookup_cached_calls()` reports how many times `lookup` itself ran — the
+number of misses, not the number of questions. The parameters are the key,
+several of them a tuple. `capacity` is 128 when nothing says, `policy` is
+`tinylfu`, `lru` or `s3fifo`, `ttl` and `tti` are durations such as `250ms`,
+`60s`, `5m` or `1h`, and `name` renames the function. An `async fn` goes through
+the asynchronous cache. A function that raises is refused, since there is
+nothing to keep when it does.
+
+For a value that is worked out once and never again, `#kart.once` turns a
+function with no arguments into a one-entry store with no way back:
+
+```moonbit
+#kart.once
+pub fn banner() -> String {
+  "kart no. 128"
+}
+```
+
+`banner_once()` answers with the first result for the rest of the process. There
+is no clear function, by design: a value that can be forgotten is a cache, and
+`#kart.cached` is the way to ask for one.
 
 The generator wires in as a dev_build rule, in `moon.mod`:
 
@@ -260,12 +300,36 @@ call retries. Three concurrent readers of one key call the loader exactly once.
 `concurrent` builds on the synchronous core unchanged, so every policy, expiry
 rule and counter carries over.
 
+### Shards
+
+`ShardedCache` splits the key space over independent caches. A key always lands
+in the same shard, so a read or a write behaves as it does on one cache; what
+changes is that each shard holds its own budget, so traffic in one cannot evict
+entries in another, and each has its own in-flight table.
+
+```moonbit
+let sharded = @concurrent.ShardedCache::new(
+  shards=4,
+  make=fn(_index) { @moonkart.lru_cache(cap=256L) },
+)
+sharded.set("user:1", "Leo")
+assert_eq(sharded.get("user:1"), Some("Leo"))
+assert_eq(sharded.shards(), 4)
+assert_eq(sharded.stats().hit_count + sharded.stats().miss_count, 1L)
+```
+
+`make` is called once per shard with its index, so each one can be bounded and
+tuned on its own. `size()` and `stats()` report the shards added together.
+Sharding is not by itself a speed-up on a runtime that schedules tasks
+cooperatively; it is the unit that keeps unrelated workloads apart, and the unit
+a caller can hand to its own threads.
+
 ## Hybrid memory and disk (native)
 
-`@moonkart.disk.DiskCache` keeps entries in memory and appends every write or
-delete to a file, so a restart can rebuild the cache from the log. Keys and
-values are turned into bytes by codecs you supply, so the layer imposes no
-format of its own.
+`@moonkart.disk.DiskCache` is a two-tier cache: a memory cache in front, and a
+file behind it that holds what memory could not keep. Every write appends a
+record, so the file doubles as the log a restart replays; every read asks memory
+first and falls to the file, whose answer is put back into memory.
 
 ```moonbit
 // moon.pkg
@@ -284,18 +348,31 @@ async fn persist(path : String) -> Unit raise {
     fn(bytes) { Some(@utf8.decode_lossy(bytes)) },
     fn(value : String) { @utf8.encode(value) },
     fn(bytes) { Some(@utf8.decode_lossy(bytes)) },
+    max_bytes=64L * 1024L * 1024L, // at most 64 MiB of live records
   )
   disk.set("greeting", "hello") // memory, then an appended record
   assert_eq(disk.get("greeting"), Some("hello"))
-  disk.compact() // rewrite the log from the live entries
+  assert_eq(disk.stats().entries, 1L)
+  disk.compact() // rewrite the file from the live records
 }
 ```
 
+The file is bounded on its own terms. `max_bytes` caps the live records it
+keeps; when a write would take it over, the least recently read record leaves
+first — a read that came from the file counts as recent. A record larger than
+the whole budget is refused rather than written: it stays in memory, `refused`
+goes up, and it is gone when memory evicts it. Without `max_bytes` the file keeps
+everything written.
+
+`stats()` reports `promotions`, `evictions`, `refused`, and the file's live
+`entries` and `bytes`. Call `compact` periodically: until it runs, superseded and
+deleted records still take space.
+
 The filesystem in the standard library is asynchronous and native-only, so this
 package is too. It is target-gated: the other backends compile unaffected, and
-`moon check --target all` stays green. Restored entries are replayed through
-`set`, so the cache's current capacity and expiry policy apply to them; call
-`compact` periodically so the append log does not grow without bound.
+`moon check --target all` stays green. Records restored on open are replayed
+through `set`, so the memory cache's current capacity and expiry policy apply to
+them.
 
 ## Invalidation
 
@@ -422,6 +499,7 @@ together with a `Config` bundle; `default_config()` fills in every optional knob
 | `ttl(ns)`, `tti(ns)` | expiry shorthands |
 | `system_clock` | the default clock, from the runtime |
 | `set(key, value)` | insert or replace |
+| `set(key, value, expire_after=ns)` | insert or replace, with a deadline for this write only |
 | `get(key)` | read, or `None` |
 | `contains(key)` | presence; no hit, no idle refresh |
 | `entry(key)`, `entry_or_null(key)` | snapshot of an entry |
@@ -431,6 +509,12 @@ together with a `Config` bundle; `default_config()` fills in every optional knob
 | `infallible_loader(loader)` | adapt a loader that cannot fail |
 | `to_array()` | every live entry as `(key, value)` |
 | `stats()`, `size()`, `policy_size()` | counters and sizes |
+| `CacheStats::merge(a, b)` | two sets of counters added together |
+
+The same library adds two more packages: `@moonkart.concurrent` for
+`AsyncCache` and `ShardedCache`, and `@moonkart.disk` for the native
+memory-plus-file tier. `#kart.cached`, `#kart.once` and `#kart.count_calls` come
+from the generator in `cmd/cached`, run as a dev_build rule.
 
 The clock, the weigher, the expiry rule and the removal listener are all
 parameters of the constructor, so one `Cache` type serves a request path, a
