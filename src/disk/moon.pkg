@@ -1,16 +1,20 @@
-// Native-only persistence: an append log on disk behind a memory cache.
+// Native-only two-tier cache: a memory tier and a bounded file behind it.
 import {
   "moonbitstack/moonkart",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/io",
   "moonbitlang/core/buffer",
+  "moonbitlang/core/hashmap",
+  "moonbitlang/core/ref",
 }
 
 options(
   targets: {
     "disk_native.mbt": [ "native" ],
+    "lru_native.mbt": [ "native" ],
     "disk_native_wbtest.mbt": [ "native" ],
+    "tier_native_wbtest.mbt": [ "native" ],
   },
   warnings: "-29",
 )
