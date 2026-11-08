@@ -5,9 +5,9 @@
 /// The cross-cutting knobs of a cache, bundled so they can be built once and
 /// reused across caches. Capacity lives on the eviction policy, not here.
 ///
-/// Fields are public so a caller can start from [`default_config`] and change
-/// one knob, or build a record by hand.
-pub struct Config[K, V] {
+/// [`default_config`] fills in every knob; write the record out when one of them
+/// differs, and hand the result to `new_with_config`.
+pub(all) struct Config[K, V] {
   weigher : Weigher[K, V]?
   clock : Clock
   expiry : Expiry[K, V]?

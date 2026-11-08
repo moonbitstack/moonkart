@@ -39,7 +39,7 @@ pub(all) enum EvictionReason {
 ///
 /// A pure time-to-live from creation uses `ttl`; a time-to-idle (idle) lifetime
 /// uses `tti`; anything else is expressed with the three callbacks directly.
-pub struct Expiry[K, V] {
+pub(all) struct Expiry[K, V] {
   after_create : (K, V, Int64) -> Int64?
   after_read : (K, V, Int64, Int64?) -> Int64?
   after_update : (K, V, Int64, Int64?) -> Int64?
