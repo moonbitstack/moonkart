@@ -23,6 +23,8 @@ priv struct Slot[V] {
   value : V
   weight : Int64
   expire_at : Int64?
+  /// The caller fixed this deadline on the write, so no rule may move it.
+  fixed : Bool
 }
 
 ///|
@@ -222,6 +224,10 @@ fn[K : Eq + Hash, V] refresh_read(
   slot : Slot[V],
   now : Int64,
 ) -> Unit {
+  // A deadline the caller fixed on the write outranks the cache's rule.
+  if slot.fixed {
+    return
+  }
   match st.val.expiry {
     Some(e) => {
       let ne = (e.after_read)(key, slot.value, now, slot.expire_at)
@@ -231,6 +237,7 @@ fn[K : Eq + Hash, V] refresh_read(
           value: slot.value,
           weight: slot.weight,
           expire_at: ne,
+          fixed: false,
         }),
       )
     }
@@ -242,10 +249,16 @@ fn[K : Eq + Hash, V] refresh_read(
 /// Inserts or replaces `key`. A replaced value is reported to the removal
 /// listener as `Replaced`; an insertion calls `after_update` when the key was
 /// already present, otherwise `after_create`.
+///
+/// `expire_after` fixes this entry's deadline at `expire_after` nanoseconds from
+/// now, for this write only: the cache's own rule does not apply to it, and a
+/// later read will not move the deadline it computed. Write the entry again
+/// without it to hand the entry back to the cache's rule.
 pub fn[K : Eq + Hash, V] Cache::set(
   self : Cache[K, V],
   key : K,
   value : V,
+  expire_after? : Int64,
 ) -> Unit {
   let st = self.state
   let now = (st.val.clock)()
@@ -253,25 +266,49 @@ pub fn[K : Eq + Hash, V] Cache::set(
     Some(w) => w(key, value)
     None => 1
   }
-  let expire_at = match st.val.entries.get(key) {
+  let previous = st.val.entries.get(key)
+  let expire_at = match expire_after {
+    Some(ns) => {
+      guard ns > 0L else {
+        abort(
+          "moonkart: set: expire_after must be a positive number of nanoseconds",
+        )
+      }
+      Some(now + ns)
+    }
+    None =>
+      match previous {
+        Some(old) =>
+          match st.val.expiry {
+            Some(e) => (e.after_update)(key, value, now, old.expire_at)
+            None => None
+          }
+        None =>
+          match st.val.expiry {
+            Some(e) => (e.after_create)(key, value, now)
+            None => None
+          }
+      }
+  }
+  match previous {
     Some(old) => {
       ignore(st.val.id_to_key.remove(old.id))
       st.val.policy.forget(old.id)
       notify(st.val, key, old.value, Replaced)
-      match st.val.expiry {
-        Some(e) => (e.after_update)(key, value, now, old.expire_at)
-        None => None
-      }
     }
-    None =>
-      match st.val.expiry {
-        Some(e) => (e.after_create)(key, value, now)
-        None => None
-      }
+    None => ()
   }
   let id = st.val.next_id
   st.val.next_id = st.val.next_id + 1
-  ignore(st.val.entries.set(key, { id, value, weight, expire_at, }))
+  ignore(
+    st.val.entries.set(key, {
+      id,
+      value,
+      weight,
+      expire_at,
+      fixed: expire_after is Some(_),
+    }),
+  )
   ignore(st.val.id_to_key.set(id, key))
   let evicted = st.val.policy.admit(id, weight, Hash::hash(key))
   let refused = process_evicted(st, evicted, id)
@@ -484,11 +521,13 @@ pub fn[K, V] infallible_loader(loader : (K) -> V) -> (K) -> V raise {
 ///|
 /// Returns the value for `key`. On a miss, runs `loader(key)` and stores the
 /// result. The loader may raise; a raised error is not cached, is counted as a
-/// load failure, and is handed to the caller unchanged.
+/// load failure, and is handed to the caller unchanged. `expire_after` does to
+/// the loaded value what it does to [`set`].
 pub fn[K : Eq + Hash, V, E : Error] Cache::get_with(
   self : Cache[K, V],
   key : K,
   loader : (K) -> V raise E,
+  expire_after? : Int64,
 ) -> V raise E {
   match self.get(key) {
     Some(v) => v
@@ -502,7 +541,7 @@ pub fn[K : Eq + Hash, V, E : Error] Cache::get_with(
       let end = (st.val.clock)()
       st.val.stats.total_load_time += end - start
       st.val.stats.load_success_count += 1
-      self.set(key, value)
+      self.set(key, value, expire_after?)
       value
     }
   }
@@ -516,6 +555,7 @@ pub fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(
   self : Cache[K, V],
   key : K,
   loader : (K) -> V? raise E,
+  expire_after? : Int64,
 ) -> V? raise E {
   match self.get(key) {
     Some(v) => Some(v)
@@ -530,7 +570,7 @@ pub fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(
           let end = (st.val.clock)()
           st.val.stats.total_load_time += end - start
           st.val.stats.load_success_count += 1
-          self.set(key, value)
+          self.set(key, value, expire_after?)
           Some(value)
         }
         None => {
