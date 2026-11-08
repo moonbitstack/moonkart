@@ -81,11 +81,12 @@ cache.<span class="c-fn">set</span>(<span class="c-str">"user:128"</span>, <span
     <div class="label">
 <pre><code><span class="c-key">let</span> by_weight = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(
   max_weight=<span class="c-num">12L</span>,
-  weigher=<span class="c-key">fn</span>(_k : String, v : String) { Int64::<span class="c-fn">from_int</span>(v.<span class="c-fn">length</span>()) },
+  weigher=<span class="c-key">fn</span>(_k : String, v : String) { v.<span class="c-fn">length</span>().<span class="c-fn">to_int64</span>() },
 )
 by_weight.<span class="c-fn">set</span>(<span class="c-str">"foo"</span>, <span class="c-str">".foo{}"</span>)  <span class="c-com">// 6</span>
 by_weight.<span class="c-fn">set</span>(<span class="c-str">"emm"</span>, <span class="c-str">".emm{}"</span>)  <span class="c-com">// 6 + 6 = 12</span>
-by_weight.<span class="c-fn">set</span>(<span class="c-str">"bar"</span>, <span class="c-str">".bar{}"</span>)  <span class="c-com">// 18 &gt; 12, so "foo" leaves</span></code></pre>
+by_weight.<span class="c-fn">set</span>(<span class="c-str">"bar"</span>, <span class="c-str">".bar{}"</span>)  <span class="c-com">// 18 &gt; 12, so "foo" leaves</span>
+<span class="c-fn">println</span>(<span class="c-str">"foo=\{by_weight.contains("foo")} emm=\{by_weight.contains("emm")} bar=\{by_weight.contains("bar")}"</span>)</code></pre>
     </div>
     <div class="out panel">
       <p class="out__tag">WHAT IT PRINTS</p>
@@ -176,7 +177,10 @@ at t=11: <b>false</b></pre>
     <p><code>stats()</code> returns the counts kept while the cache runs: hits, misses, evictions,
       and how long loading took. <code>hit_rate()</code> is derived from the first two.</p>
     <div class="label">
-<pre><code><span class="c-key">let</span> s = cache.<span class="c-fn">stats</span>()
+<pre><code><span class="c-key">let</span> counted = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">8L</span>)
+counted.<span class="c-fn">set</span>(<span class="c-str">"user:128"</span>, <span class="c-str">"Leo"</span>)
+<span class="c-key">ignore</span>(counted.<span class="c-fn">get</span>(<span class="c-str">"user:128"</span>))
+<span class="c-key">let</span> s = counted.<span class="c-fn">stats</span>()
 <span class="c-fn">println</span>(<span class="c-str">"hits \{s.hit_count}, misses \{s.miss_count}"</span>)</code></pre>
     </div>
     <div class="out panel">

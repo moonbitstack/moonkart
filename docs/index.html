@@ -311,8 +311,16 @@ cache.<span class="c-fn">set</span>(<span class="c-str">"a"</span>, <span class=
 cache.<span class="c-fn">set</span>(<span class="c-str">"b"</span>, <span class="c-num">2</span>)
 cache.<span class="c-fn">set</span>(<span class="c-str">"c"</span>, <span class="c-num">3</span>)
 cache.<span class="c-fn">set</span>(<span class="c-str">"d"</span>, <span class="c-num">4</span>)
-cache.<span class="c-fn">get</span>(<span class="c-str">"a"</span>)      <span class="c-com">// "a" is now the most recent</span>
-cache.<span class="c-fn">set</span>(<span class="c-str">"e"</span>, <span class="c-num">5</span>)   <span class="c-com">// full: "b" leaves</span></code></pre>
+<span class="c-key">let</span> a = cache.<span class="c-fn">get</span>(<span class="c-str">"a"</span>)  <span class="c-com">// "a" is now the most recent</span>
+cache.<span class="c-fn">set</span>(<span class="c-str">"e"</span>, <span class="c-num">5</span>)   <span class="c-com">// full: "b" leaves</span>
+
+<span class="c-fn">println</span>(<span class="c-str">"a is present: \{cache.contains("a")}"</span>)
+<span class="c-fn">println</span>(<span class="c-str">"read a: \{a.unwrap_or(-1)}"</span>)
+<span class="c-fn">println</span>(<span class="c-str">"b survives: \{cache.contains("b")}"</span>)
+<span class="c-fn">println</span>(<span class="c-str">"e is present: \{cache.contains("e")}"</span>)
+<span class="c-key">let</span> s = cache.<span class="c-fn">stats</span>()
+<span class="c-fn">println</span>(<span class="c-str">"hits: \{s.hit_count}, misses: \{s.miss_count}"</span>)
+<span class="c-fn">println</span>(<span class="c-str">"evictions: \{s.eviction_count}"</span>)</code></pre>
       </div>
     </div>
     <div class="panel out">
