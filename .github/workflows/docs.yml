@@ -34,9 +34,9 @@ jobs:
       - name: compile the demo engine
         run: |
           moon update
-          moon build src/web --target js --release
+          moon build src/examples/browser --target js --release
           mkdir -p docs/engine
-          cp _build/js/release/build/web/web.js docs/engine/cache.js
+          cp _build/js/release/build/examples/browser/browser.js docs/engine/cache.js
 
       - name: regenerate the api page
         run: |

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "moonbitstack/moonkart/web"
+package "moonbitstack/moonkart/examples/browser"
 
 // Values
 pub fn mk_get(String) -> String
