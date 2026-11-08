@@ -74,3 +74,9 @@ jobs:
       - name: interfaces are up to date
         run: |
           moon info --target all && git diff --exit-code
+
+      # A reader pastes the blocks of the README and the skills into a project, so they have
+      # to compile as written, against this commit's source.
+      - name: the code in the docs compiles
+        if: runner.os == 'Linux'
+        run: python3 scripts/check_snippets.py

@@ -15,13 +15,11 @@ type and a third-party policy plugs in without changing it.
 </p>
 
 ```moonbit
-let cache = @moonkart.lru_cache(cap=1000)
+let cache = @moonkart.tinylfu_cache(cap=1000)
 cache.set("answer", 42)
 
-match cache.get("answer") {
-  Some(value) => println("hit: \{value}")
-  None => println("miss")
-}
+assert_eq(cache.get("answer"), Some(42))
+assert_eq(cache.get("unknown"), None)
 ```
 
 ## Install
@@ -33,6 +31,7 @@ moon add moonbitstack/moonkart
 Then import it in a package:
 
 ```moonbit
+// moon.pkg
 import {
   "moonbitstack/moonkart",
 }
@@ -55,10 +54,10 @@ type does not change when you switch strategies.
 
 ### Measured hit rates
 
-`src/bench` replays a trace of keys through each policy and reports the hit
-rate, so a change to a policy can be judged against real access patterns rather
-than intuition. Numbers below come from the three ARC traces (the request
-streams published with the ARC paper), replaying every request:
+The `bench` package replays a trace of keys through each policy and reports the
+hit rate, so a change to a policy can be judged against real access patterns
+rather than intuition. The figures below come from the three ARC traces (the
+request streams published with the ARC paper), replaying every request:
 
 | Trace | Capacity | `lru_cache` | `s3fifo_cache` | `tinylfu_cache` |
 |:--|--:|--:|--:|--:|
@@ -70,12 +69,9 @@ Two checks make these comparable with published results. First, `lru_cache` on
 S3 at 524,288 entries returns 0.25258, reproducing the 25.26% that the ARC paper
 reports for the same trace at the same capacity, which validates both the replay
 harness and the LRU implementation. Second, the ordering matches the published
-conclusions: frequency-aware admission wins by a wide margin on the scan-heavy
-S3 trace, holds a similar lead on DS1, and only edges ahead on OLTP, where
-recency dominates and frequency has little to add.
-
-Replay of the full traces is an offline measurement, not a test; CI replays only
-the first forty thousand requests of OLTP so it needs no downloaded data.
+conclusions: frequency-aware admission wins by a wide margin on the scan-heavy S3
+trace, holds a similar lead on DS1, and only edges ahead on OLTP, where recency
+dominates and frequency has little to add.
 
 The frequency sketch is keyed by the runtime's hash seed, so a different seed
 reshuffles its collisions and moves a TinyLFU figure by a few tenths of a point;
@@ -83,18 +79,29 @@ the recency policies are unaffected.
 
 ## Capacity
 
-Bound the cache by entry count with `cap`, or by total weight with
-`max_weight` plus a `weigher`:
+Bound the cache by entry count with `cap`, or by total weight with `max_weight`
+plus a `weigher`:
 
 ```moonbit
 // At most 500 entries.
 let by_count = @moonkart.lru_cache(cap=500)
+by_count.set("a", 1)
+assert_eq(by_count.size(), 1L)
+```
 
-// At most 10 MiB, where the weight is the byte length of the value.
+```moonbit
+// At most 12 units of weight, where a value weighs one per character.
 let by_weight = @moonkart.lru_cache(
-  max_weight=10L * 1024L * 1024L,
-  weigher=fn(_key, bytes) { bytes.length().to_int64() },
+  max_weight=12L,
+  weigher=fn(_key : String, value : String) { value.length().to_int64() },
 )
+by_weight.set("foo", "123456") // 6
+by_weight.set("emm", "123456") // 6 + 6 = 12
+assert_eq(by_weight.size(), 2L)
+
+by_weight.set("bar", "123456") // 18 > 12, so the oldest entry leaves
+assert_eq(by_weight.contains("foo"), false)
+assert_eq(by_weight.size(), 2L)
 ```
 
 Without a weigher every entry weighs one, so `cap` and `max_weight` mean the
@@ -107,57 +114,105 @@ supply. The cache never reads the wall clock itself, so tests are deterministic
 and do not sleep.
 
 ```moonbit
-// Time-to-live from the moment of writing; reads do not extend it.
-let ttl_cache = @moonkart.lru_cache(cap=1000, expiry=@moonkart.ttl(60_000_000_000L))
+// Time to live from the moment of writing; reads do not extend it.
+let now : @ref.Ref[Int64] = @ref.Ref(0L)
+let ttl_cache = @moonkart.lru_cache(
+  cap=100,
+  expiry=@moonkart.ttl(10L),
+  clock=fn() { now.val },
+)
+ttl_cache.set("user:7", "Vega")
+assert_eq(ttl_cache.contains("user:7"), true)
 
-// Time-to-idle: every read restarts the countdown.
-let tti_cache = @moonkart.lru_cache(cap=1000, expiry=@moonkart.tti(30_000_000_000L))
+now.val = 11L
+assert_eq(ttl_cache.contains("user:7"), false)
+```
+
+```moonbit
+// Time to idle: every read restarts the countdown.
+let idle_now : @ref.Ref[Int64] = @ref.Ref(0L)
+let tti_cache = @moonkart.lru_cache(
+  cap=100,
+  expiry=@moonkart.tti(10L),
+  clock=fn() { idle_now.val },
+)
+tti_cache.set("session", "open")
+idle_now.val = 6L
+assert_eq(tti_cache.get("session"), Some("open")) // read at 6, so it lives to 16
+
+idle_now.val = 15L
+assert_eq(tti_cache.contains("session"), true)
+idle_now.val = 17L
+assert_eq(tti_cache.contains("session"), false)
 ```
 
 `ttl` and `tti` are shorthands over the `Expiry` record, whose `after_create`,
-`after_read` and `after_update` callbacks compute per-entry deadlines. Pass your
-own `clock` to move time under test:
-
-```moonbit
-let now : @ref.Ref[Int64] = @ref.Ref(0L)
-let cache = @moonkart.lru_cache(cap=10, expiry=@moonkart.ttl(1_000_000_000L), clock=fn() { now.val })
-```
+`after_read` and `after_update` callbacks compute a deadline per entry, so a
+rule can depend on the value or apply to only some keys.
 
 ## Loading
 
 `get_with` runs a loader only on a miss and stores its result. The loader may
-raise; a raised error is not cached and reaches the caller. `try_get_with` lets
-the loader return `None` for "no value", which is not cached either.
+raise; a raised error is not cached and reaches the caller.
 
 ```moonbit
-let user = cache.get_with(user_id, fn(id) raise { fetch_user(id) })
+let users = @moonkart.lru_cache(cap=64)
+let loads : @ref.Ref[Int] = @ref.Ref(0)
+let fetch_user = fn(id : Int) raise {
+  loads.val = loads.val + 1
+  if id < 0 {
+    fail("no such user")
+  }
+  "user-\{id}"
+}
+assert_eq(users.get_with(7, fetch_user), "user-7")
+assert_eq(users.get_with(7, fetch_user), "user-7")
+assert_eq(loads.val, 1) // the second call was a plain hit
 ```
 
-When the loader cannot fail, wrap it with `infallible_loader` so the call site
-needs no error handling:
+```moonbit
+let failed = users.get_with(-1, fetch_user) catch { _ => "none" }
+assert_eq(failed, "none")
+assert_eq(users.contains(-1), false) // a failed load leaves nothing behind
+```
+
+`try_get_with` lets the loader return `None` for "no value", which is not cached
+either. When the loader cannot fail, wrap it with `infallible_loader` so the
+call site needs no error handling:
 
 ```moonbit
-let parsed = cache.get_with(text, @moonkart.infallible_loader(fn(t) { parse(t) }))
+let parsed = users.try_get_with(
+  12,
+  @moonkart.infallible_loader(fn(id : Int) {
+    if id % 2 == 0 {
+      Some("user-\{id}")
+    } else {
+      None
+    }
+  }),
+)
+assert_eq(parsed, Some("user-12"))
+assert_eq(users.size(), 2L)
 ```
 
 ## Remembering a function
 
-`#kart.cached` is `functools.lru_cache` for MoonBit. The function stays as it is, and
-the generator adds a remembering one beside it:
+`#kart.cached` is `functools.lru_cache` for MoonBit. The function stays as it is,
+and the generator adds a remembering one beside it:
 
 ```moonbit
 #kart.cached(capacity="1024", policy="lru", ttl="60s")
 pub fn lookup(id : Int) -> String {
-  expensive(id)
+  "item-\{id}"
 }
 ```
 
-`lookup_cached(id)` reads through the cache and `lookup_cached_clear()` empties it. The
-parameters are the key, several of them a tuple. `capacity` is 128 when nothing says,
-`policy` is `tinylfu`, `lru` or `s3fifo`, `ttl` and `tti` are durations such as `250ms`,
-`60s`, `5m` or `1h`, and `name` renames the function. An `async fn` goes through the
-asynchronous cache. A function that raises is refused, since there is nothing to keep
-when it does.
+`lookup_cached(id)` reads through the cache and `lookup_cached_clear()` empties
+it. The parameters are the key, several of them a tuple. `capacity` is 128 when
+nothing says, `policy` is `tinylfu`, `lru` or `s3fifo`, `ttl` and `tti` are
+durations such as `250ms`, `60s`, `5m` or `1h`, and `name` renames the function.
+An `async fn` goes through the asynchronous cache. A function that raises is
+refused, since there is nothing to keep when it does.
 
 The generator wires in as a dev_build rule, in `moon.mod`:
 
@@ -175,16 +230,16 @@ dev_build(rule: "cached", input: "slow.mbt", output: "slow.g.mbt")
 formatter(ignore: [ "slow.g.mbt" ])
 ```
 
-`moon run src/examples/03-cached` shows it.
+`src/examples/03-cached` is a working copy of both files.
 
 ## The asynchronous cache
 
 `@moonkart.concurrent.AsyncCache` wraps any cache so that loads can be awaited.
 Concurrent readers of one key share a single loader; readers of different keys
-never wait on each other, and no lock is held while a loader runs. It is built on
-`moonbitlang/async`, so it shares the runtime your other tasks already use.
+never wait on each other, and no lock is held while a loader runs.
 
 ```moonbit
+// moon.pkg
 import {
   "moonbitstack/moonkart",
   "moonbitstack/moonkart/concurrent",
@@ -192,8 +247,10 @@ import {
 ```
 
 ```moonbit
-let cache = @concurrent.AsyncCache::new(@moonkart.lru_cache(cap=1000))
-let user = cache.get_with(id, async fn(id) { fetch_user(id) })
+let async_cache = @concurrent.AsyncCache::new(@moonkart.lru_cache(cap=64))
+let value = async_cache.get_with(1, id => "user-\{id}")
+assert_eq(value, "user-1")
+assert_eq(async_cache.get(1), Some("user-1"))
 ```
 
 The first task to miss records a per-key in-flight load and awaits it; later
@@ -211,21 +268,27 @@ values are turned into bytes by codecs you supply, so the layer imposes no
 format of its own.
 
 ```moonbit
+// moon.pkg
 import {
   "moonbitstack/moonkart",
   "moonbitstack/moonkart/disk",
 }
 ```
 
-```moonbit
-let cache = @moonkart.lru_cache(cap=10_000)
-let disk = @disk.DiskCache::open(
-  cache, "/var/cache/app.bin",
-  encode_key, decode_key, encode_value, decode_value,
-)
-disk.set(key, value)   // memory, then an appended record
-disk.get(key)          // memory only
-disk.compact()         // rewrite the log from the live entries
+```moonbit native
+async fn persist(path : String) -> Unit raise {
+  let disk = @disk.DiskCache::open(
+    @moonkart.lru_cache(cap=10_000),
+    path,
+    fn(key : String) { @utf8.encode(key) },
+    fn(bytes) { Some(@utf8.decode_lossy(bytes)) },
+    fn(value : String) { @utf8.encode(value) },
+    fn(bytes) { Some(@utf8.decode_lossy(bytes)) },
+  )
+  disk.set("greeting", "hello") // memory, then an appended record
+  assert_eq(disk.get("greeting"), Some("hello"))
+  disk.compact() // rewrite the log from the live entries
+}
 ```
 
 The filesystem in the standard library is asynchronous and native-only, so this
@@ -237,9 +300,13 @@ package is too. It is target-gated: the other backends compile unaffected, and
 ## Invalidation
 
 ```moonbit
-cache.invalidate(key)          // one key, returns whether it was present
-cache.invalidate_all()         // everything
-cache.invalidate_if(fn(k, v) { v.is_stale() })   // by predicate, returns how many
+let c = @moonkart.lru_cache(cap=8)
+c.set("a", 1)
+c.set("b", 2)
+assert_eq(c.invalidate("a"), true) // one key, returns whether it was present
+assert_eq(c.invalidate_if(fn(_k, value) { value > 1 }), 1L) // by predicate, returns how many
+c.invalidate_all() // everything
+assert_eq(c.size(), 0L)
 ```
 
 ## Events and statistics
@@ -248,16 +315,39 @@ A removal listener is told about every entry that leaves, with the reason:
 `Capacity`, `Expired`, `Explicit` or `Replaced`.
 
 ```moonbit
-let cache = @moonkart.lru_cache(
-  cap=1000,
-  removal_listener=fn(key, _value, reason) {
-    println("\{key} left: \{reason}")
+let gone : Array[String] = []
+let tracked = @moonkart.lru_cache(
+  cap=2,
+  removal_listener=fn(key : Int, _value : String, reason) {
+    let why = match reason {
+      Capacity => "capacity"
+      Expired => "expired"
+      Explicit => "explicit"
+      Replaced => "replaced"
+    }
+    gone.push("\{key}:\{why}")
   },
 )
+tracked.set(1, "a")
+tracked.set(2, "b")
+tracked.set(3, "c")
+assert_eq(gone, ["1:capacity"])
 ```
 
-`cache.stats()` returns counters for hits, misses, evictions, evicted weight,
+`stats()` returns counters for hits, misses, evictions, evicted weight,
 successful and failed loads, and the total time spent in loaders.
+`hit_rate()` and `miss_rate()` are derived from the first two.
+
+```moonbit
+let counted = @moonkart.lru_cache(cap=4)
+counted.set(1, 1)
+ignore(counted.get(1))
+ignore(counted.get(2))
+let s = counted.stats()
+assert_eq(s.hit_count, 1L)
+assert_eq(s.miss_count, 1L)
+assert_eq(s.hit_rate(), 0.5)
+```
 
 ## Custom policies
 
@@ -266,8 +356,60 @@ ids, weights and the key's hash, never the keys or values. Implement `hit`,
 `admit`, `forget` and `size` for your own type and build a cache with `new`:
 
 ```moonbit
-let cache = @moonkart.new(@my_policy.Policy::new())
+pub struct Fifo {
+  order : Array[Int64]
+  cap : Int64
+}
+
+impl @policy.Policy for Fifo with fn hit(
+  self : Fifo,
+  _id : Int64,
+  _hash : Int32,
+) -> Unit {
+  ignore(self)
+}
+
+impl @policy.Policy for Fifo with fn admit(
+  self : Fifo,
+  id : Int64,
+  _weight : Int64,
+  _hash : Int32,
+) -> Array[Int64] {
+  self.order.push(id)
+  if self.order.length().to_int64() > self.cap {
+    [self.order.remove(0)]
+  } else {
+    []
+  }
+}
+
+impl @policy.Policy for Fifo with fn forget(self : Fifo, id : Int64) -> Unit {
+  for i, v in self.order {
+    if v == id {
+      ignore(self.order.remove(i))
+      break
+    }
+  }
+}
+
+impl @policy.Policy for Fifo with fn size(self : Fifo) -> Int32 {
+  self.order.length()
+}
 ```
+
+```moonbit
+let fifo_policy : Fifo = { order: [], cap: 2L }
+let fifo = @moonkart.new(fifo_policy)
+fifo.set(1, "a")
+fifo.set(2, "b")
+fifo.set(3, "c")
+assert_eq(fifo.contains(1), false)
+assert_eq(fifo.size(), 2L)
+```
+
+`admit` returns the ids to evict, and may return the new id itself to refuse an
+entry that is too heavy for the cache. `new_with_config` takes the same policy
+together with a `Config` bundle; `default_config()` fills in every optional knob.
 
 ## API
 
@@ -287,44 +429,13 @@ let cache = @moonkart.new(@my_policy.Policy::new())
 | `invalidate_all()`, `invalidate_if(pred)` | remove many |
 | `get_with(key, loader)`, `try_get_with(key, loader)` | load on miss; the loader may raise |
 | `infallible_loader(loader)` | adapt a loader that cannot fail |
+| `to_array()` | every live entry as `(key, value)` |
 | `stats()`, `size()`, `policy_size()` | counters and sizes |
 
-### Upgrading from the 0.1.0 pre-release
-
-The module has not been published; these are the changes to make when moving
-code written against the first source drop.
-
-| Before | After |
-|:--|:--|
-| `Cache[K, V, P]` | `Cache[K, V]`; the policy is chosen at construction and erased |
-| `cache[Int, String, @policy.Lru]()` | `@moonkart.lru_cache(cap=...)` |
-| `get_with(key, fn(k) { ... })` | `get_with(key, fn(k) raise { ... })` |
-| a loader that cannot fail | wrap it: `infallible_loader(fn(k) { ... })` |
-| `@policy.Policy::hit(id)` / `admit(id, w)` | `hit(id, hash)` / `admit(id, w, hash)` |
-
-## Determinism
-
-Because the clock is a parameter and every deadline is absolute, an expiry test
-moves a `Ref` and never sleeps. See `src/cache_test.mbt` for the suite, and
-`src/examples/` for runnable programs:
-
-```bash
-moon run src/examples/tour
-moon run src/examples/01-expiry
-moon run src/examples/02-loading
-```
-
-## The gate
-
-Every commit passes this, with each exit code seen to be zero:
-
-```bash
-moon clean && moon fmt && moon check --target all --deny-warn \
-  && moon build --target all && moon test --target all
-```
-
-The generated interface is checked in; `moon info --target all && git diff
---exit-code` must be clean before a release.
+The clock, the weigher, the expiry rule and the removal listener are all
+parameters of the constructor, so one `Cache` type serves a request path, a
+long-running job and a test that moves a `Ref`. Because every deadline is
+absolute and the clock is passed in, an expiry test never sleeps.
 
 ## Licence
 

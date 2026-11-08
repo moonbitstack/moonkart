@@ -20,6 +20,7 @@ FENCE = re.compile(r"(<!--\s*nocheck\s*-->[ \t]*\n)?```(mbt|moonbit)([^\n]*)\n(.
 TOP = re.compile(r"^(pub(\([a-z]+\))? |priv |fn |async fn |test |async test |struct |enum |suberror |impl |trait |typealias |type |extern |#[a-z])", re.M)
 NAMED = re.compile(r"^(?:pub(?:\([a-z]+\))? )?(?:async )?fn ([A-Za-z_][A-Za-z0-9_]*)", re.M)
 CORE = {"array", "bench", "bigint", "buffer", "builtin", "bytes", "char", "cmp", "coverage", "deque", "double", "encoding", "env", "error", "float", "hashmap", "hashset", "immut", "int", "int16", "int64", "json", "list", "math", "option", "queue", "quickcheck", "random", "rational", "ref", "result", "set", "sorted_map", "sorted_set", "strconv", "string", "test", "tuple", "uint", "uint16", "uint64", "unit"}
+NESTED = {"utf8": "encoding/utf8", "utf16": "encoding/utf16"}
 
 
 def module_info():
@@ -107,7 +108,7 @@ def main():
                 continue
             code, spans = program(items)
             used = set(re.findall(r"@([a-z_][a-z0-9_]*)\.", code))
-            imports = sorted({aliases[a] for a in used if a in aliases} | {f"moonbitlang/core/{a}" for a in used if a not in aliases and a in CORE})
+            imports = sorted({aliases[a] for a in used if a in aliases} | {f"moonbitlang/core/{a}" for a in used if a not in aliases and a in CORE} | {f"moonbitlang/core/{NESTED[a]}" for a in used if a not in aliases and a in NESTED})
             if "async test" in code and "moonbitlang/async" not in imports:
                 imports.append("moonbitlang/async")
             pkg = src / "snippet_check"
