@@ -9,11 +9,19 @@
 fn main {
   println(square_cached(4))
   println(square_cached(4))
-  println("square ran \{runs.val} time")
+  println(
+    "square ran \{runs.val} time, and the cache counted \{square_cached_calls()}",
+  )
+
   println(area_cached(2, 3))
   println(area_cached(2, 3))
   println("both ran \{runs.val} times")
+
   square_cached_clear()
   println(square_cached(4))
-  println("cleared, so \{runs.val} times")
+  println("cleared, so \{runs.val} times in all")
+
+  println(banner_once())
+  println(banner_once())
+  println("banner ran \{banner_once_calls()} time")
 }

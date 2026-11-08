@@ -21,6 +21,14 @@ let cached_spec : @attr.Spec = @attr.Spec::new("kart.cached")
   .optional("tti", Str)
 
 ///|
+/// `#kart.once` takes no options: one value, kept forever, is not a cache to tune.
+let once_spec : @attr.Spec = @attr.Spec::new("kart.once")
+
+///|
+/// `#kart.count_calls` takes no options either; it only adds a counter.
+let calls_spec : @attr.Spec = @attr.Spec::new("kart.count_calls")
+
+///|
 /// How many results a function keeps when nothing says: `functools.lru_cache`'s
 /// default.
 let capacity : String = "128"
@@ -86,7 +94,9 @@ fn snake_free(name : String) -> Bool {
 }
 
 ///|
-/// The wrapper of one annotated function.
+/// The wrapper of one annotated function. `once` keeps one value with no
+/// arguments and no way back; `count` adds the function that reports how many
+/// times the remembered function really ran.
 fn wrapper(
   note : @attribute.Attribute,
   name : String,
@@ -95,14 +105,21 @@ fn wrapper(
   is_async : Bool,
   public : Bool,
   file : String,
+  once : Bool,
+  count : Bool,
 ) -> String raise {
   let where_ = at(note, file)
-  let args = cached_spec.bind(note)
+  let args = if once {
+    ignore(once_spec.bind(note))
+    None
+  } else {
+    Some(cached_spec.bind(note))
+  }
   guard returns is Some(value) && value != "Unit" else {
-    fail("\{where_}: a cached function returns what it remembers")
+    fail("\{where_}: a remembered function returns what it remembers")
   }
   if !snake_free(name) {
-    fail("\{where_}: `#kart.cached` goes on a free function")
+    fail("\{where_}: the annotation goes on a free function")
   }
   let names = []
   let types = []
@@ -111,47 +128,94 @@ fn wrapper(
       param.ty is Some(ty) &&
       param.pass is Positional else {
       fail(
-        "\{where_}: the arguments of a cached function are its key, so they are plain",
+        "\{where_}: the arguments of a remembered function are its key, so they are plain",
       )
     }
     names.push(p)
     types.push(ty)
+  }
+  if once && !names.is_empty() {
+    fail(
+      "\{where_}: `#kart.once` keeps one value, so the function takes no arguments",
+    )
   }
   let (key_type, key) = match (names, types) {
     ([], _) => ("Unit", "()")
     ([one], [ty]) => (ty, one)
     _ => ("(\{types.join(", ")})", "(\{names.join(", ")})")
   }
-  let cached = args.str("name").unwrap_or(name + "_cached")
-  let build = policy_of(args.str("policy").unwrap_or("tinylfu"), where_)
-  let size = args.str("capacity").unwrap_or(capacity)
+  let cached = match args {
+    Some(a) => a.str("name").unwrap_or(name + "_cached")
+    None => name + "_once"
+  }
+  let build = match args {
+    Some(a) => policy_of(a.str("policy").unwrap_or("tinylfu"), where_)
+    None => "lru_cache"
+  }
+  let size = match args {
+    Some(a) => a.str("capacity").unwrap_or(capacity)
+    None => "1"
+  }
   guard size is [_, ..] &&
     size.iter().all(c => c is ('0'..<='9')) &&
     size != "0" else {
     fail("\{where_}: `capacity` is a positive number, not `\{size}`")
   }
-  if args.str("ttl") is Some(_) && args.str("tti") is Some(_) {
-    fail("\{where_}: give `ttl` or `tti`, not both")
-  }
-  let expiry = match (args.str("ttl"), args.str("tti")) {
-    (Some(text), _) => ", expiry=@moonkart.ttl(\{nanos(text, where_)}L)"
-    (_, Some(text)) => ", expiry=@moonkart.tti(\{nanos(text, where_)}L)"
-    _ => ""
+  let expiry = match args {
+    Some(a) =>
+      if a.str("ttl") is Some(_) && a.str("tti") is Some(_) {
+        fail("\{where_}: give `ttl` or `tti`, not both")
+      } else {
+        match (a.str("ttl"), a.str("tti")) {
+          (Some(text), _) => ", expiry=@moonkart.ttl(\{nanos(text, where_)}L)"
+          (_, Some(text)) => ", expiry=@moonkart.tti(\{nanos(text, where_)}L)"
+          _ => ""
+        }
+      }
+    None => ""
   }
   let vis = if public { "pub " } else { "" }
   let holder = cached + "_store"
   let signature = names.mapi((i, p) => "\{p} : \{types[i]}").join(", ")
   let inner = "@moonkart.\{build}(cap=\{size}L\{expiry})"
   let cache_type = "@moonkart.Cache[\{key_type}, \{value}]"
-  let (store, store_type, run, clear) = if is_async {
+  let (store, store_type, run, ran) = if is_async {
     (
       "@concurrent.AsyncCache::new(\{inner})",
       "@concurrent.AsyncCache[\{key_type}, \{value}]",
       "async ",
-      "\{holder}.inner().invalidate_all()",
+      "\{holder}.inner().stats().miss_count",
     )
   } else {
-    (inner, cache_type, "", "\{holder}.invalidate_all()")
+    (inner, cache_type, "", "\{holder}.stats().miss_count")
+  }
+  // Nothing puts a one-value store back, so it has nothing to clear.
+  let clear = if once {
+    ""
+  } else if is_async {
+    (
+      $|
+      $|\{vis}fn \{cached}_clear() -> Unit {
+      $|  \{holder}.inner().invalidate_all()
+      $|}
+    )
+  } else {
+    (
+      $|
+      $|\{vis}fn \{cached}_clear() -> Unit {
+      $|  \{holder}.invalidate_all()
+      $|}
+    )
+  }
+  let calls = if count {
+    (
+      $|
+      $|\{vis}fn \{cached}_calls() -> Int64 {
+      $|  \{ran}
+      $|}
+    )
+  } else {
+    ""
   }
   (
     $|let \{holder} : \{store_type} = \{store}
@@ -166,11 +230,9 @@ fn wrapper(
     $|    }
     $|  }
     $|}
-    $|
-    $|\{vis}fn \{cached}_clear() -> Unit {
-    $|  \{clear}
-    $|}
-  )
+  ) +
+  clear +
+  calls
 }
 
 ///|
@@ -190,17 +252,50 @@ impl @gen.Generator for Cached with fn generate(_, decls) {
         raw~
       ) => {
         let found = kart_attrs(attrs, file)
-        guard found is [first, ..] else { continue }
-        if found.length() > 1 {
-          fail("\{at(found[1], file)}: `#kart.cached` is written twice")
+        guard !found.is_empty() else { continue }
+        let remembering : Array[@attribute.Attribute] = []
+        let mut counting : @attribute.Attribute? = None
+        for attr in found {
+          match @attr.name_of(attr) {
+            Some("kart.cached") | Some("kart.once") => remembering.push(attr)
+            Some("kart.count_calls") => {
+              ignore(calls_spec.bind(attr))
+              match counting {
+                Some(_) =>
+                  fail(
+                    "\{at(attr, file)}: `#kart.count_calls` is written twice",
+                  )
+                None => counting = Some(attr)
+              }
+            }
+            _ =>
+              fail(
+                "\{at(attr, file)}: `\{attr.raw}` is not a moonkart annotation",
+              )
+          }
         }
-        if @attr.name_of(first) != Some("kart.cached") {
-          fail(
-            "\{at(first, file)}: `\{first.raw}` is not a moonkart annotation",
-          )
+        if remembering.length() > 1 {
+          let first = @attr.name_of(remembering[0]).unwrap_or("")
+          let second = @attr.name_of(remembering[1]).unwrap_or("")
+          if first == second {
+            fail("\{at(remembering[1], file)}: `#\{second}` is written twice")
+          } else {
+            fail(
+              "\{at(remembering[1], file)}: `#\{second}` cannot go beside `#\{first}`: a function is remembered one way",
+            )
+          }
+        }
+        guard remembering is [note, ..] else {
+          match counting {
+            Some(attr) =>
+              fail(
+                "\{at(attr, file)}: `#kart.count_calls` goes beside `#kart.cached` or `#kart.once`",
+              )
+            None => continue
+          }
         }
         if owner is Some(_) {
-          fail("\{at(first, file)}: `#kart.cached` goes on a free function")
+          fail("\{at(note, file)}: the annotation goes on a free function")
         }
         guard raw
           is TopFuncDef(
@@ -208,14 +303,27 @@ impl @gen.Generator for Cached with fn generate(_, decls) {
             ..
           ) else {
           fail(
-            "\{at(first, file)}: a raising function cannot be cached: there is nothing to keep when it raises",
+            "\{at(note, file)}: a raising function cannot be remembered: there is nothing to keep when it raises",
           )
         }
-        out.push(wrapper(first, name, params, returns, is_async, public, file))
+        let once = @attr.name_of(note) == Some("kart.once")
+        out.push(
+          wrapper(
+            note,
+            name,
+            params,
+            returns,
+            is_async,
+            public,
+            file,
+            once,
+            counting is Some(_),
+          ),
+        )
       }
       Struct(attrs~, file~, ..) | Enum(attrs~, file~, ..) =>
         if kart_attrs(attrs, file) is [first, ..] {
-          fail("\{at(first, file)}: `#kart.cached` goes on a free function")
+          fail("\{at(first, file)}: the annotation goes on a free function")
         }
       Other(..) => ()
     }

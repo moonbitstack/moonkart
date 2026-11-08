@@ -24,6 +24,11 @@ pub fn square_cached_clear() -> Unit {
 }
 
 ///|
+pub fn square_cached_calls() -> Int64 {
+  square_cached_store.stats().miss_count
+}
+
+///|
 let area_cached_store : @moonkart.Cache[(Int32, Int32), Int32] = @moonkart.tinylfu_cache(
   cap=128L,
 )
@@ -43,4 +48,26 @@ pub fn area_cached(width : Int32, height : Int32) -> Int32 {
 ///|
 pub fn area_cached_clear() -> Unit {
   area_cached_store.invalidate_all()
+}
+
+///|
+let banner_once_store : @moonkart.Cache[Unit, String] = @moonkart.lru_cache(
+  cap=1L,
+)
+
+///|
+pub fn banner_once() -> String {
+  match banner_once_store.get(()) {
+    Some(v) => v
+    None => {
+      let v = banner()
+      banner_once_store.set((), v)
+      v
+    }
+  }
+}
+
+///|
+pub fn banner_once_calls() -> Int64 {
+  banner_once_store.stats().miss_count
 }

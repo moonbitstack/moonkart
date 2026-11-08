@@ -8,9 +8,17 @@ pub fn area_cached(Int32, Int32) -> Int32
 
 pub fn area_cached_clear() -> Unit
 
+pub fn banner() -> String
+
+pub fn banner_once() -> String
+
+pub fn banner_once_calls() -> Int64
+
 pub fn square(Int32) -> Int32
 
 pub fn square_cached(Int32) -> Int32
+
+pub fn square_cached_calls() -> Int64
 
 pub fn square_cached_clear() -> Unit
 
