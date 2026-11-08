@@ -60,6 +60,19 @@ fn sessions(clock : () -> Int64) -> @moonkart.Cache[String, Bytes] {
 
 `ttl(ns)` counts from the write and is not extended by reads; `tti(ns)` restarts on every read. The `Expiry` record takes per-entry callbacks for anything else.
 
+## Remember a function
+
+```moonbit
+#kart.cached(capacity="1024", policy="lru", ttl="60s")
+pub fn price_of(sku : String) -> Double {
+  sku.length().to_double()
+}
+```
+
+The generator adds `price_of_cached(sku)` beside the function, which reads through a cache, and `price_of_cached_clear()`. `policy` is `tinylfu`, `lru` or `s3fifo`;
+`ttl` and `tti` take durations such as `250ms`, `60s`, `5m`, `1h`. The function must not raise. Enable it with a `dev_build` rule in `moon.mod` and a
+`dev_build(rule: "cached", input: "...", output: "...")` line in `moon.pkg`; see the repository's `src/examples/03-cached` for both files.
+
 ## Things that catch people out
 
 - The cache reads no clock unless you give it one: expiry needs `clock`, a nanosecond reading. `system_clock` is there for production; tests pass their own and never sleep.
