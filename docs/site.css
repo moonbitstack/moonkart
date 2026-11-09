@@ -284,6 +284,9 @@ html.shout .title{font-family:var(--marker);letter-spacing:-.01em;line-height:.8
      drawn later, so it passes behind it the way a card in a box would. */
   clip-path:polygon(4.27% 28.66%, 50% 53.05%, 95.73% 28.66%, 95.73% 0, 4.27% 0)}
 .layer-front{z-index:3}
+/* the desk lies in front of the box's foot and is not cut by the mouth */
+.layer-desk{z-index:4;position:absolute;inset:0;pointer-events:none}
+.layer-desk .slot{pointer-events:auto}
 /* the box gives a little under the hand that opens it */
 .stage.is-thumped{animation:thump .26s cubic-bezier(.3,.9,.3,1)}
 @keyframes thump{
@@ -310,7 +313,7 @@ html[data-lid="open"] .openlid{display:none}
 .flap__body polygon{stroke-width:1.2}
 .tray.is-locked{opacity:.6;pointer-events:none}
 
-.slot{position:absolute;width:24%;height:24%;transform-origin:50% 100%;
+.slot{position:absolute;width:31.71%;height:24.09%;transform-origin:0 100%;
   transition:transform .45s cubic-bezier(.2,.8,.3,1),opacity .3s}
 .slot[hidden]{display:none}
 /* A slip is cut from the small box, so its board is a fraction of the thick
@@ -328,11 +331,10 @@ html[data-lid="open"] .openlid{display:none}
 .slot.landing .cardface{animation:drop .42s cubic-bezier(.2,1.2,.4,1) both}
 /* you reach for a card, it lifts. The z-index stays below the front layer's
    3, so a card can never end up drawn over the rim. */
-.slot:hover{z-index:1}
 .slot:hover .cardface{transform:translateY(-3px) scale(1.02);
   box-shadow:0 .8px 0 rgba(150,118,76,.28), 0 14px 20px -14px rgba(0,0,0,.8)}
 /* and when you take it, it comes out of the box like a card out of a hand */
-.slot.is-drawn{z-index:1}
+.slot.is-drawn{z-index:9 !important}
 .slot.is-drawn .cardface{transform:scale(1.14) rotate(-2deg);transform-origin:50% 0;
   transition:transform .28s cubic-bezier(.2,1.15,.35,1), box-shadow .28s;
   box-shadow:0 .8px 0 rgba(150,118,76,.3), 0 22px 28px -18px rgba(0,0,0,.85)}
@@ -345,8 +347,8 @@ html[data-lid="open"] .openlid{display:none}
   color:#241a10;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .slot.leaving{transition:none}
 .slot.leaving .cardface{animation:eject .55s ease-in forwards}
-.slot.gone{position:absolute;left:-13%;bottom:4%;width:17%;opacity:.92;
-  transform:rotate(-9deg);cursor:pointer;transition:none}
+.slot.gone{position:absolute;width:20%;height:14%;opacity:.95;
+  transform-origin:0 0;cursor:pointer;transition:none}
 .slot.gone .cardface{animation:none;background:linear-gradient(172deg,#e6d5b6,#d8c39c)}
 .slot.gone.miss .cardface{animation:miss .5s ease-out}
 @keyframes miss{

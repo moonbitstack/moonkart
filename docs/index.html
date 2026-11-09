@@ -178,9 +178,10 @@
             <path d="M260.7 273.2V285.6" stroke="rgba(255,255,255,.16)" stroke-width=".5"/>
           </g>
 
-          <!-- hand-written mark, set low enough that the open flap clears it -->
-          <g transform="rotate(-29.7 330 320)">
-            <text x="272" y="322" font-family="'Caveat',cursive" font-weight="700" font-size="32"
+          <!-- hand-written mark, set low enough that the flap hanging open over
+               this wall (70 units under the rim) clears it -->
+          <g transform="rotate(-29.7 330 340)">
+            <text x="272" y="342" font-family="'Caveat',cursive" font-weight="700" font-size="32"
                   fill="#5a3d22" opacity=".7">moonkart</text>
           </g>
 
@@ -250,6 +251,10 @@
           </g>
 
         </svg>
+
+        <!-- the desk beside the box: a card the cache gave up lies here, outside the
+             mouth, so it is not cut by the walls the way the cards in the box are -->
+        <div class="layer-desk" id="desk" aria-live="polite"></div>
 
         <button class="openlid" id="openlid" type="button" aria-label="Open the box"></button>
 
@@ -376,15 +381,41 @@ evictions: <b>1</b></pre>
 </svg>
 
 <script type="module">
-/* where an entry sits in the box: a fan, as if the carton had been packed and
-   the slips had shifted on their way here */
-const SLOTS = [
-  { left: "24%", top: "28%", rot: -8 },
-  { left: "32%", top: "31%", rot: -3 },
-  { left: "40%", top: "28%", rot: 3 },
-  { left: "48%", top: "26%", rot: 8 },
-];
+/* Where an entry sits in the box: upright, like a card in a file box, its face
+   parallel to the front-left wall, the newest at the front and the one the cache
+   gives up next at the back. A point is worked out on the drawing's own board,
+   in its units: along the front-left wall, then back into the box. The stage
+   maps the drawing's 96..424 square onto 0..100%. */
 const CAP = 4;
+const WALL = [0.8824, 0.4706];
+const DEPTH = [0.8824, -0.4706];
+const CARD_W = 104;
+const CARD_H = 79;
+/* the foot of a card stands this far under the rim, behind the board */
+const SINK = 34;
+const pct = (u) => (u / 328) * 100;
+function slotAt(k) {
+  const along = (170 - CARD_W) / 2;
+  const depth = 22 + k * 30;
+  const x = 110 + WALL[0] * along + DEPTH[0] * depth;
+  const y = 176 + WALL[1] * along + DEPTH[1] * depth + SINK;
+  return { left: pct(x - 96), top: pct(y - 82) - pct(CARD_H), z: CAP + 1 - k };
+}
+/* A card the cache gave up lies flat on the desk in front of the left wall. The
+   floor's two axes are the box's own: along the front-left wall, and towards the
+   eye. A small turn within the floor first, so the cards land a little askew. */
+const onFloor = (deg) => {
+  const r = (deg * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+  const f = (n) => n.toFixed(4);
+  return `matrix(${f(WALL[0] * (c - s))}, ${f(WALL[1] * (c + s))}, ${f(-WALL[0] * (c + s))}, ${f(WALL[1] * (c - s))}, 0, 0)`;
+};
+const DESK = [
+  { left: 11, top: 78, turn: 4 },
+  { left: 4, top: 81.5, turn: -9 },
+  { left: -3, top: 84, turn: 12 },
+];
+/* a card's face takes the wall's shear: across along the wall, straight up */
+const FACE = `matrix(${WALL[0]}, ${WALL[1]}, 0, 1, 0, 0)`;
 const desk = [];
 
 const root = document.documentElement;
@@ -396,6 +427,7 @@ if (forced === "shout" || (forced !== "hand" && Math.random() < 0.2)) {
 }
 
 const cardsEl = document.getElementById("cards");
+const deskEl = document.getElementById("desk");
 const trayEl = document.getElementById("tray");
 const hintEl = document.getElementById("hint");
 const box = {
@@ -435,11 +467,21 @@ function card(key, value, extra) {
 }
 
 function seat(i) {
-  const s = SLOTS[i] || SLOTS[SLOTS.length - 1];
+  /* live runs oldest first; the oldest stands at the back */
+  const s = slotAt(live.length - 1 - i);
   const el = live[i].el;
-  el.style.left = s.left;
-  el.style.top = s.top;
-  el.style.transform = `rotate(${s.rot}deg)`;
+  el.style.left = s.left + "%";
+  el.style.top = s.top + "%";
+  el.style.zIndex = String(s.z);
+  el.style.transform = FACE;
+}
+
+/* a hit makes an entry the most recent, so its card comes to the front */
+function toFront(key) {
+  const at = live.findIndex((c) => c.key === key);
+  if (at < 0 || at === live.length - 1) return;
+  live.push(live.splice(at, 1)[0]);
+  live.forEach((_, i) => seat(i));
 }
 
 function flash(el) {
@@ -464,16 +506,18 @@ function put(key, value) {
     gone.el.classList.add("leaving");
     setTimeout(() => {
       gone.el.className = "slot gone";
-      gone.el.style.transform = "rotate(-9deg)";
-      gone.el.style.left = "";
-      gone.el.style.top = "";
+      gone.el.style.zIndex = "";
       gone.el.addEventListener("click", () => miss(gone.el), { once: false });
-      cardsEl.appendChild(gone.el);
+      deskEl.appendChild(gone.el);
       desk.push(gone.el);
       while (desk.length > 3) desk.shift().remove();
-      desk.forEach((el, i) => {
-        el.style.left = `${1 + i * 9}%`;
-        el.style.bottom = `${8 + i * 2}%`;
+      /* the newest lies on top, nearest the box */
+      desk.slice().reverse().forEach((el, i) => {
+        const d = DESK[i];
+        el.style.left = d.left + "%";
+        el.style.top = d.top + "%";
+        el.style.zIndex = String(3 - i);
+        el.style.transform = onFloor(d.turn);
       });
     }, 540);
   }
@@ -505,6 +549,7 @@ function ask(key, el) {
   takeCard(el);
   if (state === "hit") {
     flash(el);
+    toFront(key);
     hintEl.textContent = `${key}: a hit. Nothing had to be computed.`;
   } else {
     hintEl.textContent = `${key}: a miss.`;
