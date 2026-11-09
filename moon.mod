@@ -1,6 +1,6 @@
 name = "moonbitstack/moonkart"
 
-version = "0.1.1"
+version = "0.1.2"
 
 readme = "README.md"
 
@@ -36,7 +36,7 @@ keywords = [
 description = "A cache for MoonBit: bounded by count or weight, with expiry, loaders and eviction listeners."
 
 import {
-  "moonbitstack/moonast@0.2.6",
+  "moonbitstack/moonast@0.2.7",
   "moonbitlang/parser@0.4.6",
   "moonbitlang/async@0.22.5",
 }
