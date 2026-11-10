@@ -1,12 +1,41 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitstack/moonkart/disk"
 
+import {
+  "moonbitlang/async",
+  "moonbitstack/moonkart",
+  "moonbitstack/moonkart/policy",
+  "moonbitstack/moonkart/tier",
+}
+
 // Values
 
 // Errors
 
 // Types and methods
+pub struct DiskCache[K, V] {
+  cache : @moonkart.Cache[K, V]
+  path : String
+  encode_key : (K) -> Bytes
+  decode_key : (Bytes) -> K?
+  encode_value : (V) -> Bytes
+  decode_value : (Bytes) -> V?
+  write_lock : @async.Mutex
+  // private fields
+}
+pub fn[K, V] DiskCache::budget(Self[K, V]) -> Int64
+pub fn[K, V] DiskCache::cache(Self[K, V]) -> @moonkart.Cache[K, V]
+pub async fn[K : Eq + Hash, V] DiskCache::compact(Self[K, V]) -> Unit
+pub fn[K : Eq + Hash, V] DiskCache::contains(Self[K, V], K) -> Bool
+pub async fn[K : Eq + Hash, V] DiskCache::get(Self[K, V], K) -> V?
+pub async fn[K : Eq + Hash, V] DiskCache::open(@moonkart.Cache[K, V], StringView, (K) -> Bytes, (Bytes) -> K?, (V) -> Bytes, (Bytes) -> V?, max_bytes? : Int64, admission? : @policy.Admission) -> Self[K, V]
+pub fn[K, V] DiskCache::path(Self[K, V]) -> String
+pub async fn[K : Eq + Hash, V] DiskCache::remove(Self[K, V], K) -> Bool
+pub async fn[K : Eq + Hash, V] DiskCache::set(Self[K, V], K, V) -> Unit
+pub fn[K, V] DiskCache::size(Self[K, V]) -> Int64
+pub fn[K, V] DiskCache::stats(Self[K, V]) -> @tier.Stats
 
 // Type aliases
+pub using @tier {type Stats}
 
 // Traits

@@ -1,6 +1,8 @@
 // Native-only two-tier cache: a memory tier and a bounded file behind it.
 import {
   "moonbitstack/moonkart",
+  "moonbitstack/moonkart/policy",
+  "moonbitstack/moonkart/tier",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/io",
@@ -12,7 +14,6 @@ import {
 options(
   targets: {
     "disk_native.mbt": [ "native" ],
-    "lru_native.mbt": [ "native" ],
     "disk_native_wbtest.mbt": [ "native" ],
     "tier_native_wbtest.mbt": [ "native" ],
   },

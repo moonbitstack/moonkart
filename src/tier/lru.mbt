@@ -1,8 +1,8 @@
 // Copyright 2026 Leo Cheng
 // SPDX-License-Identifier: Apache-2.0
 
-// The order the file evicts in. Keys are kept in a doubly linked list over a
-// hash map, so a read moves a key to the back and an eviction takes the front
+// The order a second tier evicts in. Keys are kept in a doubly linked list over
+// a hash map, so a read moves a key to the back and an eviction takes the front
 // without scanning. The links are rebuilt rather than mutated in place: a
 // `HashMap` hands back a copy, so a field write on it would be lost.
 

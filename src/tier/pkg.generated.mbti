@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitstack/moonkart/tier"
+
+import {
+  "moonbitstack/moonkart/policy",
+}
+
+// Values
+pub fn hash_of_bytes(BytesView) -> Int32
+
+// Errors
+
+// Types and methods
+pub(all) struct Record {
+  slot : Int64
+  len : Int32
+}
+
+pub(all) struct Stats {
+  mut promotions : Int64
+  mut evictions : Int64
+  mut refused : Int64
+  mut denied : Int64
+  mut entries : Int64
+  mut bytes : Int64
+}
+
+pub struct Tier[K] {
+  // private fields
+}
+pub fn[K : Eq + Hash] Tier::admit(Self[K], K, Int64, Int32) -> Array[K]
+pub fn[K] Tier::budget(Self[K]) -> Int64
+pub fn[K] Tier::bytes(Self[K]) -> Int64
+pub fn[K : Eq + Hash] Tier::contains(Self[K], K) -> Bool
+pub fn[K : Eq + Hash] Tier::discharge(Self[K], K) -> Record?
+pub fn[K] Tier::frequency(Self[K], K) -> Int32
+pub fn[K : Eq + Hash] Tier::keys(Self[K]) -> Array[K]
+pub fn[K : Eq + Hash] Tier::new(@policy.Admission, Int64, (K) -> Int32) -> Self[K]
+pub fn[K] Tier::note_refused(Self[K]) -> Unit
+pub fn[K : Eq + Hash] Tier::promote(Self[K], K) -> Unit
+pub fn[K : Eq + Hash] Tier::record_of(Self[K], K) -> Record?
+pub fn[K] Tier::record_seen(Self[K], K) -> Unit
+pub fn[K : Eq + Hash] Tier::restore(Self[K], K, Int64, Int32) -> Unit
+pub fn[K : Eq + Hash] Tier::shrink(Self[K]) -> Array[K]
+pub fn[K] Tier::stats(Self[K]) -> Stats
+
+// Type aliases
+
+// Traits

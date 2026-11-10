@@ -167,3 +167,80 @@ async test "compact drops what the budget already evicted" {
   assert_eq(disk.get(3), Some(30))
   discard(dir, path)
 }
+
+///|
+async test "a key seen twice keeps its place against a key seen once" {
+  let dir = @fs.tmpdir(prefix="moonkart-tier-value-")
+  let path = dir + "/cache.bin"
+  let cache = @moonkart.lru_cache(cap=8L)
+  let disk = DiskCache::open(
+    cache,
+    path,
+    encode_i32,
+    decode_i32,
+    encode_i32,
+    decode_i32,
+    max_bytes=34L, // two 17-byte records
+  )
+  disk.set(1, 10)
+  disk.set(1, 11) // the same key again: seen twice
+  disk.set(2, 20)
+  assert_eq(disk.stats().entries, 2L)
+  disk.set(3, 30) // seen once, and the budget is spent
+  assert_eq(disk.stats().denied, 1L)
+  assert_eq(disk.stats().evictions, 0L)
+  assert_eq(disk.stats().entries, 2L)
+  // Memory still answers for it; the file does not hold it, and a restart
+  // honours the same decision.
+  assert_eq(disk.get(3), Some(30))
+  let reopened_cache = @moonkart.lru_cache(cap=8L)
+  let reopened = DiskCache::open(
+    reopened_cache,
+    path,
+    encode_i32,
+    decode_i32,
+    encode_i32,
+    decode_i32,
+    max_bytes=34L,
+  )
+  assert_eq(reopened.get(3), None)
+  assert_eq(reopened.get(1), Some(11))
+  assert_eq(reopened.get(2), Some(20))
+  discard(dir, path)
+}
+
+///|
+async test "taking everything writes what value admission turns away" {
+  let dir = @fs.tmpdir(prefix="moonkart-tier-take-all-")
+  let path = dir + "/cache.bin"
+  let cache = @moonkart.lru_cache(cap=8L)
+  let disk = DiskCache::open(
+    cache,
+    path,
+    encode_i32,
+    decode_i32,
+    encode_i32,
+    decode_i32,
+    max_bytes=34L,
+    admission=@policy.TakeAll,
+  )
+  disk.set(1, 10)
+  disk.set(1, 11)
+  disk.set(2, 20)
+  disk.set(3, 30)
+  assert_eq(disk.stats().denied, 0L)
+  assert_eq(disk.stats().evictions, 1L)
+  let reopened_cache = @moonkart.lru_cache(cap=8L)
+  let reopened = DiskCache::open(
+    reopened_cache,
+    path,
+    encode_i32,
+    decode_i32,
+    encode_i32,
+    decode_i32,
+    max_bytes=34L,
+  )
+  assert_eq(reopened.get(1), None)
+  assert_eq(reopened.get(3), Some(30))
+  discard(dir, path)
+}

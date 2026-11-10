@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // A native, asynchronous two-tier cache. Memory answers reads first; the file
-// behind it holds what memory could not keep, with a byte budget and an eviction
-// order of its own, and a read that misses memory is served from the file and
-// put back into memory.
+// behind it holds what memory could not keep, with a byte budget, an eviction
+// order and an admission rule of its own, and a read that misses memory is
+// served from the file and put back into memory.
 //
 // Wire format, all little-endian:
 //
@@ -15,42 +15,14 @@
 // the first record it cannot read in full, which keeps the last durable prefix.
 
 ///|
-/// What the file has done since it was opened. `entries` and `bytes` describe the
-/// live records, not the size of the file: deleted and superseded records keep
-/// taking space until a `compact` rewrites them away.
-pub(all) struct Stats {
-  mut promotions : Int64
-  mut evictions : Int64
-  mut refused : Int64
-  mut entries : Int64
-  mut bytes : Int64
-}
-
-///|
-/// Where one live record sits in the file.
-priv struct Record {
-  offset : Int64
-  len : Int32
-}
-
-///|
-/// The mutable half: the index, the eviction order and the counters, all behind
-/// one `Ref` so every method sees the same ones after the handle is copied.
-priv struct Tier[K] {
-  index : @hashmap.HashMap[K, Record]
-  order : Lru[K]
-  mut bytes : Int64
-  mut end_offset : Int64
-  mut promotions : Int64
-  mut evictions : Int64
-  mut refused : Int64
-}
+pub using @tier {type Stats}
 
 ///|
 /// A cache backed by both memory and a file. The memory cache answers reads; the
-/// file holds a record for every write, so the cache survives a restart, and the
-/// file is itself bounded: `max_bytes` caps the live records it keeps, and the
-/// least recently read one leaves when the cap is reached.
+/// file holds a record for every write it keeps, so the cache survives a
+/// restart, and the file is itself bounded: `max_bytes` caps the live records,
+/// and when a write would spend the last of the budget the rule in `admission`
+/// decides whether the newcomer or a resident record leaves.
 ///
 /// Keys and values are encoded with codecs you supply, so the layer stays
 /// generic and imposes no wire format of its own. Records restored on open are
@@ -65,8 +37,8 @@ pub struct DiskCache[K, V] {
   encode_value : (V) -> Bytes
   decode_value : (Bytes) -> V?
   write_lock : @async.Mutex
-  max_bytes : Int64
-  priv tier : Ref[Tier[K]]
+  priv end_offset : @ref.Ref[Int64]
+  priv tier : @tier.Tier[K]
 }
 
 ///|
@@ -76,6 +48,10 @@ pub struct DiskCache[K, V] {
 /// `max_bytes` bounds the file's live records. Without it the file keeps
 /// everything written; with it, an entry larger than the whole budget is refused
 /// and stays in memory only, and older entries leave to make room.
+///
+/// `admission` decides who wins that last byte. The default keeps a newcomer
+/// only if it has been seen more often than the record it would displace, which
+/// is what keeps a scan of one-hit keys from walking the file clean.
 pub async fn[K : Eq + Hash, V] DiskCache::open(
   cache : @moonkart.Cache[K, V],
   path : StringView,
@@ -84,7 +60,9 @@ pub async fn[K : Eq + Hash, V] DiskCache::open(
   encode_value : (V) -> Bytes,
   decode_value : (Bytes) -> V?,
   max_bytes? : Int64,
+  admission~ : @policy.Admission = ByValue,
 ) -> DiskCache[K, V] {
+  let budget = max_bytes.unwrap_or(0L)
   let disk : DiskCache[K, V] = {
     cache,
     path: path.to_owned(),
@@ -93,15 +71,9 @@ pub async fn[K : Eq + Hash, V] DiskCache::open(
     encode_value,
     decode_value,
     write_lock: @async.Mutex(),
-    max_bytes: max_bytes.unwrap_or(0L),
-    tier: @ref.Ref({
-      index: @hashmap.HashMap([]),
-      order: Lru::new(),
-      bytes: 0L,
-      end_offset: 0L,
-      promotions: 0L,
-      evictions: 0L,
-      refused: 0L,
+    end_offset: @ref.Ref(0L),
+    tier: @tier.Tier::new(admission, budget, fn(key) {
+      @tier.hash_of_bytes(encode_key(key).exact_view())
     }),
   }
   if @fs.exists(disk.path) {
@@ -109,11 +81,9 @@ pub async fn[K : Eq + Hash, V] DiskCache::open(
   } else {
     @fs.write_file(disk.path, empty_view())
   }
-  disk.tier.val.end_offset = @fs.file_size(disk.path)
+  disk.end_offset.val = @fs.file_size(disk.path)
   // Opening a file that is already over its budget trims it before anyone reads.
-  disk.write_lock.acquire()
-  disk.evict_to_budget(None)
-  disk.write_lock.release()
+  ignore(disk.tier.shrink())
   disk
 }
 
@@ -130,15 +100,15 @@ pub fn[K, V] DiskCache::cache(self : DiskCache[K, V]) -> @moonkart.Cache[K, V] {
 }
 
 ///|
+/// The bytes the file's live records take, against the budget it was opened with.
+pub fn[K, V] DiskCache::budget(self : DiskCache[K, V]) -> Int64 {
+  self.tier.budget()
+}
+
+///|
 /// What the file has done since it was opened.
 pub fn[K, V] DiskCache::stats(self : DiskCache[K, V]) -> Stats {
-  {
-    promotions: self.tier.val.promotions,
-    evictions: self.tier.val.evictions,
-    refused: self.tier.val.refused,
-    entries: self.tier.val.index.length().to_int64(),
-    bytes: self.tier.val.bytes,
-  }
+  self.tier.stats()
 }
 
 ///|
@@ -151,19 +121,18 @@ pub async fn[K : Eq + Hash, V] DiskCache::get(
   match self.cache.get(key) {
     Some(v) => Some(v)
     None =>
-      match self.tier.val.index.get(key) {
+      match self.tier.record_of(key) {
         None => None
         Some(record) => {
           let file = @fs.open(self.path, mode=ReadOnly)
-          let raw = file.read_exactly_at(record.len, position=record.offset)
+          let raw = file.read_exactly_at(record.len, position=record.slot)
           file.close()
           match
             parse_put(raw.exact_view(), self.decode_key, self.decode_value) {
             None => None
             Some((found, value)) => {
               self.cache.set(found, value)
-              self.tier.val.order.move_to_back(found)
-              self.tier.val.promotions = self.tier.val.promotions + 1L
+              self.tier.promote(found)
               Some(value)
             }
           }
@@ -178,7 +147,7 @@ pub fn[K : Eq + Hash, V] DiskCache::contains(
   self : DiskCache[K, V],
   key : K,
 ) -> Bool {
-  self.cache.contains(key) || self.tier.val.index.contains(key)
+  self.cache.contains(key) || self.tier.contains(key)
 }
 
 ///|
@@ -188,10 +157,12 @@ pub fn[K, V] DiskCache::size(self : DiskCache[K, V]) -> Int64 {
 }
 
 ///|
-/// Writes `key` to memory and appends a record to the file, then makes room in
-/// the file if the budget is spent. A record larger than the whole budget is not
-/// written at all: it stays in memory, is counted as refused, and is gone when
-/// memory evicts it.
+/// Writes `key` to memory and appends a record to the file, then makes room if
+/// the budget is spent. A record larger than the whole budget is not written at
+/// all: it stays in memory, is counted as refused, and is gone when memory
+/// evicts it. A record the admission rule turns away is written, marked dead in
+/// the same log, and left off the index, so a restart does not bring it back and
+/// only [`compact`] reclaims its bytes.
 pub async fn[K : Eq + Hash, V] DiskCache::set(
   self : DiskCache[K, V],
   key : K,
@@ -202,21 +173,19 @@ pub async fn[K : Eq + Hash, V] DiskCache::set(
   write_put(buf, self.encode_key, self.encode_value, key, value)
   let record = buf.to_bytes()
   let len = record.length()
-  if self.max_bytes > 0L && len.to_int64() > self.max_bytes {
-    self.tier.val.refused = self.tier.val.refused + 1L
+  let budget = self.tier.budget()
+  if budget > 0L && len.to_int64() > budget {
+    self.tier.note_refused()
     return
   }
   self.write_lock.acquire()
   defer self.write_lock.release()
   let offset = self.append(record.exact_view())
-  match self.tier.val.index.get(key) {
-    Some(old) => self.tier.val.bytes = self.tier.val.bytes - old.len.to_int64()
-    None => ()
+  for victim in self.tier.admit(key, offset, len) {
+    let del = @buffer.Buffer()
+    write_del(del, self.encode_key, victim)
+    ignore(self.append(del.to_bytes().exact_view()))
   }
-  ignore(self.tier.val.index.set(key, { offset, len, }))
-  self.tier.val.order.move_to_back(key)
-  self.tier.val.bytes = self.tier.val.bytes + len.to_int64()
-  self.evict_to_budget(Some(key))
 }
 
 ///|
@@ -226,29 +195,23 @@ pub async fn[K : Eq + Hash, V] DiskCache::remove(
   key : K,
 ) -> Bool {
   let in_memory = self.cache.remove(key)
-  let record = self.tier.val.index.get(key)
-  let on_disk = record is Some(_)
-  if on_disk {
-    self.write_lock.acquire()
-    defer self.write_lock.release()
-    let buf = @buffer.Buffer()
-    write_del(buf, self.encode_key, key)
-    ignore(self.append(buf.to_bytes().exact_view()))
-    match record {
-      Some(old) =>
-        self.tier.val.bytes = self.tier.val.bytes - old.len.to_int64()
-      None => ()
+  match self.tier.discharge(key) {
+    None => in_memory
+    Some(_) => {
+      self.write_lock.acquire()
+      defer self.write_lock.release()
+      let buf = @buffer.Buffer()
+      write_del(buf, self.encode_key, key)
+      ignore(self.append(buf.to_bytes().exact_view()))
+      true
     }
-    ignore(self.tier.val.index.remove(key))
-    self.tier.val.order.remove(key)
   }
-  in_memory || on_disk
 }
 
 ///|
-/// Rewrites the file from the live records, dropping superseded and deleted
-/// ones, and re-points the index at the new offsets. Run this periodically so
-/// the file does not grow without bound.
+/// Rewrites the file from the live records, dropping superseded, deleted and
+/// never-admitted ones, and re-points the index at the new offsets. Run this
+/// periodically so the file does not grow without bound.
 pub async fn[K : Eq + Hash, V] DiskCache::compact(
   self : DiskCache[K, V],
 ) -> Unit {
@@ -257,25 +220,20 @@ pub async fn[K : Eq + Hash, V] DiskCache::compact(
   let data = @fs.read_file(self.path).binary()
   let view = data.exact_view()
   let out = @buffer.Buffer()
-  for key in self.tier.val.order.to_array() {
-    match self.tier.val.index.get(key) {
+  for key in self.tier.keys() {
+    match self.tier.record_of(key) {
       None => ()
       Some(record) => {
-        let start = record.offset.to_int()
+        let start = record.slot.to_int()
         let body = view.exact_view(start~, end=start + record.len)
-        ignore(
-          self.tier.val.index.set(key, {
-            offset: out.length().to_int64(),
-            len: record.len,
-          }),
-        )
+        self.tier.restore(key, out.length().to_int64(), record.len)
         out.write_bytes(body)
       }
     }
   }
   let total = out.to_bytes()
   @fs.write_file(self.path, total.exact_view())
-  self.tier.val.end_offset = total.length().to_int64()
+  self.end_offset.val = total.length().to_int64()
 }
 
 ///|
@@ -284,46 +242,10 @@ async fn[K, V] DiskCache::append(
   self : DiskCache[K, V],
   record : BytesView,
 ) -> Int64 {
-  let offset = self.tier.val.end_offset
+  let offset = self.end_offset.val
   @fs.write_file(self.path, record, create_mode=OpenOrCreate, append=true)
-  self.tier.val.end_offset = offset + record.length().to_int64()
+  self.end_offset.val = offset + record.length().to_int64()
   offset
-}
-
-///|
-/// Drops the least recently read records until the file is inside its budget.
-/// The record just written is never the one dropped, so a write is not undone by
-/// its own arrival; if it is the only record left it stays, and the budget is
-/// overrun by at most that one record.
-///
-/// The caller holds the write lock: every path into here appends.
-async fn[K : Eq + Hash, V] DiskCache::evict_to_budget(
-  self : DiskCache[K, V],
-  keep : K?,
-) -> Unit {
-  while self.max_bytes > 0L && self.tier.val.bytes > self.max_bytes {
-    match self.tier.val.order.front() {
-      None => break
-      Some(victim) =>
-        match keep {
-          Some(key) if key == victim => break
-          _ => {
-            let buf = @buffer.Buffer()
-            write_del(buf, self.encode_key, victim)
-            ignore(self.append(buf.to_bytes().exact_view()))
-            match self.tier.val.index.get(victim) {
-              Some(record) =>
-                self.tier.val.bytes = self.tier.val.bytes -
-                  record.len.to_int64()
-              None => ()
-            }
-            ignore(self.tier.val.index.remove(victim))
-            self.tier.val.order.remove(victim)
-            self.tier.val.evictions = self.tier.val.evictions + 1L
-          }
-        }
-    }
-  }
 }
 
 ///|
@@ -443,20 +365,7 @@ async fn[K : Eq + Hash, V] replay(disk : DiskCache[K, V]) -> Unit {
         Some(k) =>
           match (disk.decode_value)(vb) {
             Some(v) => {
-              match disk.tier.val.index.get(k) {
-                Some(old) =>
-                  disk.tier.val.bytes = disk.tier.val.bytes - old.len.to_int64()
-                None => ()
-              }
-              ignore(
-                disk.tier.val.index.set(k, {
-                  offset: start.to_int64(),
-                  len: off - start,
-                }),
-              )
-              disk.tier.val.order.move_to_back(k)
-              disk.tier.val.bytes = disk.tier.val.bytes +
-                (off - start).to_int64()
+              disk.tier.restore(k, start.to_int64(), off - start)
               disk.cache.set(k, v)
             }
             None => ()
@@ -476,13 +385,7 @@ async fn[K : Eq + Hash, V] replay(disk : DiskCache[K, V]) -> Unit {
       off = off + klen
       match (disk.decode_key)(kb) {
         Some(k) => {
-          match disk.tier.val.index.get(k) {
-            Some(old) =>
-              disk.tier.val.bytes = disk.tier.val.bytes - old.len.to_int64()
-            None => ()
-          }
-          ignore(disk.tier.val.index.remove(k))
-          disk.tier.val.order.remove(k)
+          ignore(disk.tier.discharge(k))
           ignore(disk.cache.remove(k))
         }
         None => ()

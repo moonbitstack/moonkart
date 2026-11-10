@@ -42,3 +42,5 @@ import {
 }
 
 source = "src"
+
+preferred_target = "native"
