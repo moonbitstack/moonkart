@@ -36,6 +36,21 @@ pub let tinylfu_window_ratio : Double = 0.1
 pub let tinylfu_protected_ratio : Double = 0.8
 
 ///|
+/// How a newcomer earns a place where room is already taken. The in-memory
+/// policies decide this themselves; a second tier over a slower medium takes it
+/// as a knob, because there a wrong decision costs a write as well.
+pub(all) enum Admission {
+  /// Keep the newcomer only if it has been seen more often than the record it
+  /// would displace, which is the rule TinyLFU states: a key seen once cannot
+  /// push out a key seen twice. A record that loses stays wherever its caller
+  /// already put it and never reaches the slower medium.
+  ByValue
+  /// Keep everything that fits, and let the least recently used record go to
+  /// make room. Predictable, and the right choice when every write matters.
+  TakeAll
+}
+
+///|
 /// A node of the intrusive doubly linked list used by the LRU-family policies.
 pub struct Link {
   priv prev : Int64
@@ -374,8 +389,16 @@ pub impl Policy for S3Fifo with fn size(self : S3Fifo) -> Int32 {
 pub extend S3Fifo with Policy::{admit, hit, forget, size}
 
 ///|
-/// A Count-Min frequency sketch with periodic aging. The doorkeeper in
-/// `Tinylfu` keeps one-hit wonders from polluting the counters.
+/// A frequency sketch: four rows of 4-bit counters, sized from the number of
+/// entries the caller wants to remember, with the whole table halved once the
+/// sample window fills. It answers "how often has this key been seen lately"
+/// from a hash alone, so a key keeps its history after it leaves and comes back.
+///
+/// The shape follows the sketch behind TinyLFU, as Caffeine and moka implement
+/// it: a counter per entry per row (four rows, four times the capacity rounded
+/// up to a power of two), counters saturating at 15, and a reset that halves
+/// every counter every `10 × capacity` records. The reset is what keeps the
+/// estimate about recent traffic rather than the whole history.
 pub struct Sketch {
   priv rows : Array[Array[Int32]]
   priv mask : Int32
@@ -389,7 +412,9 @@ let sketch_seeds : Array[Int32] = [
 ]
 
 ///|
-fn new_sketch(capacity : Int32) -> Sketch {
+/// Creates a sketch sized for `capacity` keys. A capacity below 16 is treated as
+/// 16, which is the smallest table whose rows still spread the hashes.
+pub fn Sketch::new(capacity : Int32) -> Sketch {
   let width = max2(16, (capacity * 4).next_power_of_two())
   let rows = [
     Array::make(width, 0),
@@ -406,7 +431,12 @@ fn new_sketch(capacity : Int32) -> Sketch {
 }
 
 ///|
-fn Sketch::sketch_increment(self : Sketch, hash : Int32) -> Unit {
+/// Counts one sighting of the key whose hash is `hash`, halving the whole table
+/// first when the sample window is full.
+pub fn Sketch::record(self : Sketch, hash : Int32) -> Unit {
+  if self.count.val >= self.sample_size {
+    self.age()
+  }
   let x = hash
   for i = 0; i < 4; i = i + 1 {
     let idx = (x * sketch_seeds[i]) & self.mask
@@ -416,7 +446,9 @@ fn Sketch::sketch_increment(self : Sketch, hash : Int32) -> Unit {
 }
 
 ///|
-fn Sketch::sketch_estimate(self : Sketch, hash : Int32) -> Int32 {
+/// The estimated frequency of the key whose hash is `hash`: the smallest of its
+/// four counters, which is the estimate the collisions cannot inflate.
+pub fn Sketch::estimate(self : Sketch, hash : Int32) -> Int32 {
   let x = hash
   let mut est = 15
   for i = 0; i < 4; i = i + 1 {
@@ -427,7 +459,9 @@ fn Sketch::sketch_estimate(self : Sketch, hash : Int32) -> Int32 {
 }
 
 ///|
-fn Sketch::sketch_age(self : Sketch) -> Unit {
+/// Halves every counter and the sample count. [`record`] runs this when the
+/// window fills; calling it directly forgets old traffic at once.
+pub fn Sketch::age(self : Sketch) -> Unit {
   for i = 0; i < 4; i = i + 1 {
     let row = self.rows[i]
     for j = 0; j < row.length(); j = j + 1 {
@@ -476,7 +510,7 @@ pub fn new_tinylfu(
     window: new_list(),
     probation: new_list(),
     protected_list: new_list(),
-    sketch: new_sketch(max.to_int()),
+    sketch: Sketch::new(max.to_int()),
     id_hash: @hashmap.HashMap([]),
   }
 }
@@ -486,14 +520,6 @@ fn Tinylfu::total_weight(self : Tinylfu) -> Int64 {
   self.window.weight_sum.val +
   self.probation.weight_sum.val +
   self.protected_list.weight_sum.val
-}
-
-///|
-fn Tinylfu::record_access(self : Tinylfu, hash : Int32) -> Unit {
-  if self.sketch.count.val >= self.sketch.sample_size {
-    self.sketch.sketch_age()
-  }
-  self.sketch.sketch_increment(hash)
 }
 
 ///|
@@ -524,8 +550,7 @@ fn Tinylfu::evict(self : Tinylfu) -> Array[Int64] {
         None => true
         Some(v) => {
           let vhash = self.id_hash.get(v).unwrap_or(0)
-          self.sketch.sketch_estimate(chash) >
-          self.sketch.sketch_estimate(vhash)
+          self.sketch.estimate(chash) > self.sketch.estimate(vhash)
         }
       }
     }
@@ -560,7 +585,7 @@ pub impl Policy for Tinylfu with fn hit(
   id : Int64,
   hash : Int32,
 ) -> Unit {
-  self.record_access(hash)
+  self.sketch.record(hash)
   if self.window.contains(id) {
     self.window.move_to_back(id)
   } else if self.probation.contains(id) {
@@ -592,7 +617,7 @@ pub impl Policy for Tinylfu with fn admit(
   hash : Int32,
 ) -> Array[Int64] {
   ignore(self.id_hash.set(id, hash))
-  self.record_access(hash)
+  self.sketch.record(hash)
   self.window.push_back(id, weight)
   self.evict()
 }

@@ -15,6 +15,11 @@ pub let tinylfu_window_ratio : Double
 // Errors
 
 // Types and methods
+pub(all) enum Admission {
+  ByValue
+  TakeAll
+}
+
 pub struct IntrusiveList {
   // private fields
 }
@@ -44,6 +49,10 @@ pub impl Policy for S3Fifo
 pub struct Sketch {
   // private fields
 }
+pub fn Sketch::age(Self) -> Unit
+pub fn Sketch::estimate(Self, Int32) -> Int32
+pub fn Sketch::new(Int32) -> Self
+pub fn Sketch::record(Self, Int32) -> Unit
 
 pub struct Tinylfu {
   // private fields
