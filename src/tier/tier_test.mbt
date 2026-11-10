@@ -124,3 +124,12 @@ test "a budget of nothing keeps everything" {
   assert_eq(tier.stats().entries, 50L)
   assert_eq(tier.stats().evictions, 0L)
 }
+
+///|
+test "a record adopted from the medium counts as a read" {
+  let tier = tier_of(@policy.ByValue, 102L)
+  ignore(tier.adopt(5, 0, 17))
+  // The medium answered a read, so the key is both recent and seen.
+  assert_eq(tier.stats().promotions, 1L)
+  assert_eq(tier.frequency(5), 1)
+}

@@ -1,6 +1,6 @@
 ---
 name: moonkart
-description: "Cache values in MoonBit with moonbitstack/moonkart: bounded by entry count or by weight, W-TinyLFU, LRU or S3-FIFO eviction behind one Cache type, time-to-live and time-to-idle on a clock you pass, loaders that run only on a miss, eviction events and hit statistics, a concurrent cache, a native memory-plus-disk tier, and #kart.cached to memoise a function. Use when code repeats an expensive lookup or computation, or needs a bounded map that forgets."
+description: "Cache values in MoonBit with moonbitstack/moonkart: bounded by entry count or by weight, W-TinyLFU, LRU or S3-FIFO eviction behind one Cache type, time-to-live and time-to-idle on a clock you pass, loaders that run only on a miss, eviction events and hit statistics, a concurrent cache that can reload a stale value behind a read, second tiers on a file or in browser storage, and #kart.cached to memoise a function. Use when code repeats an expensive lookup or computation, or needs a bounded map that forgets."
 ---
 
 # moonkart
