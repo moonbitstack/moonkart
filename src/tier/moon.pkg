@@ -1,7 +1,8 @@
-// Bookkeeping for a second tier over a slower medium: index, order, budget and
-// the frequency sketch behind value-based admission.
+// Bookkeeping for a second tier over a slower medium: index, order, budget, the
+// frequency sketch behind value-based admission, and the bytes of one record.
 import {
   "moonbitstack/moonkart/policy",
+  "moonbitlang/core/buffer",
   "moonbitlang/core/hashmap",
   "moonbitlang/core/ref",
 }

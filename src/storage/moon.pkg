@@ -1,0 +1,18 @@
+// A second tier over a store of strings: browser storage, or anything that
+// answers get, set, remove and keys.
+import {
+  "moonbitstack/moonkart",
+  "moonbitstack/moonkart/policy",
+  "moonbitstack/moonkart/tier",
+  "moonbitstack/moonbase/base16",
+  "moonbitstack/moonbase/base64",
+}
+
+import {
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/hashmap",
+} for "test"
+
+options(
+  targets: { "local_js.mbt": [ "js" ] },
+)

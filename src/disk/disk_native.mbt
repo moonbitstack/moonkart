@@ -128,7 +128,11 @@ pub async fn[K : Eq + Hash, V] DiskCache::get(
           let raw = file.read_exactly_at(record.len, position=record.slot)
           file.close()
           match
-            parse_put(raw.exact_view(), self.decode_key, self.decode_value) {
+            @tier.decode_record(
+              raw.exact_view(),
+              self.decode_key,
+              self.decode_value,
+            ) {
             None => None
             Some((found, value)) => {
               self.cache.set(found, value)
@@ -169,9 +173,12 @@ pub async fn[K : Eq + Hash, V] DiskCache::set(
   value : V,
 ) -> Unit {
   self.cache.set(key, value)
-  let buf = @buffer.Buffer()
-  write_put(buf, self.encode_key, self.encode_value, key, value)
-  let record = buf.to_bytes()
+  let record = @tier.encode_record(
+    self.encode_key,
+    self.encode_value,
+    key,
+    value,
+  )
   let len = record.length()
   let budget = self.tier.budget()
   if budget > 0L && len.to_int64() > budget {
@@ -182,9 +189,9 @@ pub async fn[K : Eq + Hash, V] DiskCache::set(
   defer self.write_lock.release()
   let offset = self.append(record.exact_view())
   for victim in self.tier.admit(key, offset, len) {
-    let del = @buffer.Buffer()
-    write_del(del, self.encode_key, victim)
-    ignore(self.append(del.to_bytes().exact_view()))
+    ignore(
+      self.append(@tier.encode_delete(self.encode_key, victim).exact_view()),
+    )
   }
 }
 
@@ -200,9 +207,9 @@ pub async fn[K : Eq + Hash, V] DiskCache::remove(
     Some(_) => {
       self.write_lock.acquire()
       defer self.write_lock.release()
-      let buf = @buffer.Buffer()
-      write_del(buf, self.encode_key, key)
-      ignore(self.append(buf.to_bytes().exact_view()))
+      ignore(
+        self.append(@tier.encode_delete(self.encode_key, key).exact_view()),
+      )
       true
     }
   }
@@ -249,74 +256,8 @@ async fn[K, V] DiskCache::append(
 }
 
 ///|
-/// Parses one `put` record, returning the key and value it carries.
-fn[K, V] parse_put(
-  view : BytesView,
-  decode_key : (Bytes) -> K?,
-  decode_value : (Bytes) -> V?,
-) -> (K, V)? {
-  let total = view.length()
-  if total < 5 || view.at(0).to_int() != 1 {
-    return None
-  }
-  let klen = read_i32_le(view, 1)
-  if klen < 0 || 5 + klen > total {
-    return None
-  }
-  let vstart = 5 + klen
-  if vstart + 4 > total {
-    return None
-  }
-  let vlen = read_i32_le(view, vstart)
-  if vlen < 0 || vstart + 4 + vlen > total {
-    return None
-  }
-  let key_bytes = view.exact_view(start=5, end=5 + klen).to_owned()
-  let value_bytes = view
-    .exact_view(start=vstart + 4, end=vstart + 4 + vlen)
-    .to_owned()
-  match decode_key(key_bytes) {
-    Some(key) =>
-      match decode_value(value_bytes) {
-        Some(value) => Some((key, value))
-        None => None
-      }
-    None => None
-  }
-}
-
-///|
 fn empty_view() -> BytesView {
   @buffer.Buffer().to_bytes().exact_view()
-}
-
-///|
-fn[K, V] write_put(
-  buf : @buffer.Buffer,
-  encode_key : (K) -> Bytes,
-  encode_value : (V) -> Bytes,
-  key : K,
-  value : V,
-) -> Unit {
-  let kb = encode_key(key)
-  let vb = encode_value(value)
-  buf.write_byte(b'\x01')
-  buf.write_int_le(kb.length())
-  buf.write_bytes(kb.exact_view())
-  buf.write_int_le(vb.length())
-  buf.write_bytes(vb.exact_view())
-}
-
-///|
-fn[K] write_del(
-  buf : @buffer.Buffer,
-  encode_key : (K) -> Bytes,
-  key : K,
-) -> Unit {
-  let kb = encode_key(key)
-  buf.write_byte(b'\x02')
-  buf.write_int_le(kb.length())
-  buf.write_bytes(kb.exact_view())
 }
 
 ///|

@@ -238,6 +238,23 @@ pub fn[K : Eq + Hash] Tier::restore(
 }
 
 ///|
+/// Indexes a record the medium answered a read with: it counts as a promotion,
+/// and whatever the budget then pushes out is returned for the medium to delete.
+/// A medium shared with another process adopts records this tier never wrote, so
+/// adopting is not the same as restoring.
+pub fn[K : Eq + Hash] Tier::adopt(
+  self : Tier[K],
+  key : K,
+  slot : Int64,
+  len : Int32,
+) -> Array[K] {
+  self.place(key, slot, len)
+  self.record_seen(key)
+  self.stats.val.promotions = self.stats.val.promotions + 1L
+  self.shrink()
+}
+
+///|
 /// Forgets `key` and returns its record, if the tier held one. The caller writes
 /// the medium's own delete.
 pub fn[K : Eq + Hash] Tier::discharge(self : Tier[K], key : K) -> Record? {

@@ -6,7 +6,17 @@ import {
 }
 
 // Values
+pub fn[K, V] decode_record(BytesView, (Bytes) -> K?, (Bytes) -> V?) -> (K, V)?
+
+pub fn[K] encode_delete((K) -> Bytes, K) -> Bytes
+
+pub fn[K, V] encode_record((K) -> Bytes, (V) -> Bytes, K, V) -> Bytes
+
 pub fn hash_of_bytes(BytesView) -> Int32
+
+pub let record_del : Byte
+
+pub let record_put : Byte
 
 // Errors
 
@@ -29,6 +39,7 @@ pub struct Tier[K] {
   // private fields
 }
 pub fn[K : Eq + Hash] Tier::admit(Self[K], K, Int64, Int32) -> Array[K]
+pub fn[K : Eq + Hash] Tier::adopt(Self[K], K, Int64, Int32) -> Array[K]
 pub fn[K] Tier::budget(Self[K]) -> Int64
 pub fn[K] Tier::bytes(Self[K]) -> Int64
 pub fn[K : Eq + Hash] Tier::contains(Self[K], K) -> Bool

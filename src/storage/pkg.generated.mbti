@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitstack/moonkart/storage"
+
+import {
+  "moonbitstack/moonkart",
+  "moonbitstack/moonkart/policy",
+  "moonbitstack/moonkart/tier",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct StorageCache[K, V] {
+  cache : @moonkart.Cache[K, V]
+  storage : &Storage
+  prefix : String
+  encode_key : (K) -> Bytes
+  decode_key : (Bytes) -> K?
+  encode_value : (V) -> Bytes
+  decode_value : (Bytes) -> V?
+  // private fields
+}
+pub fn[K : Eq + Hash, V] StorageCache::apply_storage_event(Self[K, V], String) -> Bool
+pub fn[K, V] StorageCache::budget(Self[K, V]) -> Int64
+pub fn[K, V] StorageCache::cache(Self[K, V]) -> @moonkart.Cache[K, V]
+pub fn[K : Eq + Hash, V] StorageCache::contains(Self[K, V], K) -> Bool
+pub fn[K : Eq + Hash, V] StorageCache::get(Self[K, V], K) -> V?
+pub fn[K : Eq + Hash, V] StorageCache::open(@moonkart.Cache[K, V], &Storage, (K) -> Bytes, (Bytes) -> K?, (V) -> Bytes, (Bytes) -> V?, max_bytes? : Int64, prefix? : String, admission? : @policy.Admission) -> Self[K, V]
+pub fn[K : Eq + Hash, V] StorageCache::remove(Self[K, V], K) -> Bool
+pub fn[K : Eq + Hash, V] StorageCache::set(Self[K, V], K, V) -> Unit
+pub fn[K, V] StorageCache::size(Self[K, V]) -> Int64
+pub fn[K, V] StorageCache::stats(Self[K, V]) -> @tier.Stats
+pub fn[K, V] StorageCache::text_of(Self[K, V], K) -> String
+
+// Type aliases
+
+// Traits
+pub(open) trait Storage {
+  fn get(Self, String) -> String?
+  fn set(Self, String, String) -> Unit
+  fn remove(Self, String) -> Unit
+  fn keys(Self) -> Array[String]
+}
