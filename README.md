@@ -300,6 +300,47 @@ call retries. Three concurrent readers of one key call the loader exactly once.
 `concurrent` builds on the synchronous core unchanged, so every policy, expiry
 rule and counter carries over.
 
+### Refreshing behind a read
+
+A value that took ten minutes to work out should not have to be a choice between
+a hit that never moves and a miss on every read. Give the cache a refresh window
+and a value older than it answers the read at once while the loader runs behind
+it:
+
+```moonbit
+let clock_now : @ref.Ref[Int64] = @ref.Ref(0L)
+let fetched = @concurrent.AsyncCache::new(
+  @moonkart.lru_cache(cap=64, clock=fn() { clock_now.val }),
+  refresh=@concurrent.refresh_every(60_000_000_000L), // an hour, in nanoseconds
+)
+let version : @ref.Ref[Int] = @ref.Ref(0)
+let load_user = async fn(id : Int) -> String {
+  version.val = version.val + 1
+  "user-\{id} v\{version.val}"
+}
+assert_eq(fetched.get_with(1, load_user), "user-1 v1")
+
+// An hour later the value is stale: the read is answered from it, and the
+// reload it starts runs behind the read.
+clock_now.val = 60_000_000_000L
+assert_eq(fetched.get_with(1, load_user), "user-1 v1")
+assert_eq(version.val, 1) // the loader has not run again yet
+fetched.settle()
+assert_eq(version.val, 2)
+assert_eq(fetched.get(1), Some("user-1 v2"))
+```
+
+`settle` runs whatever reloads are waiting. In a real program the cache runs them
+itself: hand it a way to start a task and they live in your task group, which is
+what `AsyncCache::new(inner, refresh=window, spawn=fn(task) { group.spawn_bg(task) })`
+does inside `@async.with_task_group`. A reload that raises keeps the old value
+and reports the error to `refresh.on_failure`; one key has at most one reload in
+flight, however many readers find it stale; and `refresh_after=ns` on `get_with`
+or `try_get_with` overrides the window for that call.
+
+The synchronous cache has no refresh. It answers a read and returns, with nowhere
+to run a reload, so its values change only when something writes them.
+
 ### Shards
 
 `ShardedCache` splits the key space over independent caches. A key always lands
@@ -364,15 +405,88 @@ the whole budget is refused rather than written: it stays in memory, `refused`
 goes up, and it is gone when memory evicts it. Without `max_bytes` the file keeps
 everything written.
 
-`stats()` reports `promotions`, `evictions`, `refused`, and the file's live
-`entries` and `bytes`. Call `compact` periodically: until it runs, superseded and
-deleted records still take space.
+Who gets that last byte is a decision, and by default it goes to the record that
+has been seen more often. The file keeps a frequency sketch over the keys it
+wrote — the same sketch the policies use — so a key seen once cannot push out a
+key seen twice, and a scan of one-off keys leaves the working set alone. On a
+stream where seven requests in ten name one of ten keys and the rest walk a long
+list of new ones, with room for twelve records, that answers 1,285 of 2,000
+requests where keeping everything that fits answers 1,194. Pass
+`admission=@policy.TakeAll` to keep the plain rule instead; an equal estimate
+goes to the newcomer either way, so a cache with no favourite keys behaves
+exactly as it did.
+
+```moonbit native
+// A file that keeps what is read, not what merely arrived last.
+async fn picky(path : String) -> Unit raise {
+  let disk = @disk.DiskCache::open(
+    @moonkart.lru_cache(cap=10_000),
+    path,
+    fn(key : String) { @utf8.encode(key) },
+    fn(bytes) { Some(@utf8.decode_lossy(bytes)) },
+    fn(value : String) { @utf8.encode(value) },
+    fn(bytes) { Some(@utf8.decode_lossy(bytes)) },
+    max_bytes=64L * 1024L * 1024L,
+    admission=@policy.TakeAll, // keep everything that fits, as before
+  )
+  disk.set("greeting", "hello")
+  assert_eq(disk.stats().denied, 0L) // nothing was turned away
+  assert_eq(disk.stats().entries, 1L)
+}
+```
+
+`stats()` reports `promotions`, `evictions`, `refused`, `denied`, and the file's
+live `entries` and `bytes`. Call `compact` periodically: until it runs,
+superseded and deleted records still take space.
 
 The filesystem in the standard library is asynchronous and native-only, so this
 package is too. It is target-gated: the other backends compile unaffected, and
 `moon check --target all` stays green. Records restored on open are replayed
 through `set`, so the memory cache's current capacity and expiry policy apply to
 them.
+
+## Second tier in browser storage (js)
+
+`@moonkart.storage` is the same second tier over a store of strings, which is what
+a browser has: one entry per record, kept across reloads. `local_storage()` binds
+the browser's own store; anything that answers `get`, `set`, `remove` and `keys`
+can stand in its place, which is how this package is tested without a browser.
+
+```moonbit
+// moon.pkg
+import {
+  "moonbitstack/moonkart",
+  "moonbitstack/moonkart/storage",
+}
+```
+
+```moonbit js
+let page = @storage.StorageCache::open(
+  @moonkart.tinylfu_cache(cap=500),
+  @storage.local_storage(),
+  fn(key : String) { @utf8.encode(key) },
+  fn(bytes) { Some(@utf8.decode_lossy(bytes)) },
+  fn(value : String) { @utf8.encode(value) },
+  fn(bytes) { Some(@utf8.decode_lossy(bytes)) },
+  max_bytes=1L * 1024L * 1024L, // at most 1 MiB of records
+)
+page.set("cart", "3 items")
+assert_eq(page.get("cart"), Some("3 items"))
+assert_eq(page.stats().entries, 1L)
+page.watch()
+```
+
+The rules are the file tier's: `max_bytes` bounds the records, the least recently
+read one leaves when a write would go over, a record larger than the budget is
+refused, and `admission` decides who keeps the last byte. Each record is stored
+under a prefix and the key's hex, its body base64, so one cache cannot read
+another's entries and a key is recognisable in a developer tool.
+
+`watch()` is what a page needs when the same page is open twice. It listens for
+the browser's `storage` event and drops this page's copy of whatever the other
+page wrote, so the next read takes the value that was actually written instead of
+answering from memory that has fallen behind. Pass `apply_storage_event(key)`
+yourself if you would rather wire the event your own way.
 
 ## Invalidation
 
@@ -510,11 +624,19 @@ together with a `Config` bundle; `default_config()` fills in every optional knob
 | `to_array()` | every live entry as `(key, value)` |
 | `stats()`, `size()`, `policy_size()` | counters and sizes |
 | `CacheStats::merge(a, b)` | two sets of counters added together |
+| `written_at(key)`, `now()` | when a value was written, and the clock reading before it |
+| `refresh_every(ns)` | a refresh window for `@moonkart/concurrent` |
+| `AsyncCache::get_with(key, loader, refresh_after=ns)` | a stale value answers, and is reloaded behind the read |
+| `AsyncCache::settle()` | run the reloads that are waiting |
+| `StorageCache::open(...)`, `apply_storage_event(key)`, `local_storage()` | the second tier over a store of strings |
+| `@policy.TakeAll`, `@policy.ByValue` | how a second tier spends its last byte |
 
-The same library adds two more packages: `@moonkart.concurrent` for
-`AsyncCache` and `ShardedCache`, and `@moonkart.disk` for the native
-memory-plus-file tier. `#kart.cached`, `#kart.once` and `#kart.count_calls` come
-from the generator in `cmd/cached`, run as a dev_build rule.
+The same library adds three more packages: `@moonkart.concurrent` for
+`AsyncCache` and `ShardedCache`, `@moonkart.disk` for the native memory-plus-file
+tier, and `@moonkart.storage` for the two-tier cache over browser storage.
+`@moonkart.tier` holds the bookkeeping those two tiers share. `#kart.cached`,
+`#kart.once` and `#kart.count_calls` come from the generator in `cmd/cached`, run
+as a dev_build rule.
 
 The clock, the weigher, the expiry rule and the removal listener are all
 parameters of the constructor, so one `Cache` type serves a request path, a

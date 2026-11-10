@@ -305,6 +305,18 @@
       <p class="spec__p">W-TinyLFU by default, LRU and S3-FIFO when you want them, and
         your own behind the same contract. The cache type never changes.</p>
     </article>
+    <article class="panel spec">
+      <span class="spec__n">05 / FRESHNESS</span>
+      <h2 class="spec__h">Refreshes behind a read</h2>
+      <p class="spec__p">A value past its window still answers, while the loader runs
+        behind the read. One reload per key, and a failed one keeps what you had.</p>
+    </article>
+    <article class="panel spec">
+      <span class="spec__n">06 / TIERS</span>
+      <h2 class="spec__h">Outlives the process</h2>
+      <p class="spec__p">A second tier on a file or in browser storage, bounded in
+        bytes, admitting by how often a key is seen, restored when the process starts.</p>
+    </article>
   </section>
 
   <section class="code">

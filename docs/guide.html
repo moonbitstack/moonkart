@@ -38,7 +38,7 @@
 </header>
 
 <aside class="toc panel">
-  <h2>Six steps</h2>
+  <h2>Eight steps</h2>
   <ol>
     <li><a href="#put">Put something in</a></li>
     <li><a href="#bound">Bound the box</a></li>
@@ -46,6 +46,8 @@
     <li><a href="#load">Load it once</a></li>
     <li><a href="#fail">When a load fails</a></li>
     <li><a href="#count">Read the counters</a></li>
+    <li><a href="#reload">Answer, then reload</a></li>
+    <li><a href="#outlive">Outlive the process</a></li>
   </ol>
 </aside>
 
@@ -194,6 +196,89 @@ counted.<span class="c-fn">set</span>(<span class="c-str">"user:128"</span>, <sp
     <div class="note"><span><b>Removal listener.</b> Pass one at construction and every entry that
       leaves reports why: <code>Capacity</code>, <code>Expired</code>, <code>Explicit</code> or
       <code>Replaced</code>.</span></div>
+  </section>
+
+  <section class="chapter panel" id="reload">
+    <span class="chapter__eyebrow">07 / RELOAD</span>
+    <h2>Answer, then reload</h2>
+    <p>A value that took a minute to work out should not cost a miss every time it is asked for. Give the
+      asynchronous cache a refresh window: a value older than the window answers the read at once, and the
+      loader runs behind it. The window is measured from the write, so nobody has to remember when the
+      value arrived.</p>
+    <div class="label">
+<pre><code><span class="c-key">let</span> clock_now : <span class="c-pkg">@ref</span>.Ref[<span class="c-pkg">Int64</span>] = <span class="c-pkg">@ref</span>.Ref(<span class="c-num">0L</span>)
+<span class="c-key">let</span> polled = <span class="c-pkg">@concurrent</span>.<span class="c-fn">AsyncCache::new</span>(
+  <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">8</span>, clock=<span class="c-key">fn</span>() { clock_now.val }),
+  refresh=<span class="c-pkg">@concurrent</span>.<span class="c-fn">refresh_every</span>(<span class="c-num">60_000_000_000L</span>), <span class="c-com">// an hour, in nanoseconds</span>
+)
+<span class="c-key">let</span> runs : <span class="c-pkg">@ref</span>.Ref[<span class="c-pkg">Int</span>] = <span class="c-pkg">@ref</span>.Ref(<span class="c-num">0</span>)
+<span class="c-key">let</span> report = <span class="c-key">async fn</span>(_id : <span class="c-pkg">Int</span>) <span class="c-key">-&gt;</span> <span class="c-pkg">String</span> {
+  runs.val = runs.val + <span class="c-num">1</span>
+  <span class="c-str">"report #\{runs.val}"</span>
+}
+<span class="c-key">ignore</span>(polled.<span class="c-fn">get_with</span>(<span class="c-num">7</span>, report))     <span class="c-com">// a miss: the loader runs</span>
+clock_now.val = <span class="c-num">60_000_000_000L</span>       <span class="c-com">// an hour later the value is stale</span>
+<span class="c-key">let</span> stale = polled.<span class="c-fn">get_with</span>(<span class="c-num">7</span>, report)  <span class="c-com">// answered, and reloaded behind the read</span>
+<span class="c-key">let</span> before = runs.val
+polled.<span class="c-fn">settle</span>()                        <span class="c-com">// run what is waiting</span>
+<span class="c-key">let</span> fresh = polled.<span class="c-fn">get</span>(<span class="c-num">7</span>).<span class="c-fn">unwrap</span>()
+<span class="c-fn">println</span>(<span class="c-str">"\{stale}, then \{fresh}: the loader ran \{before} time(s) during the read, \{runs.val} by the end"</span>)</code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>report #1, then report #2: the loader ran <b>1</b> time(s) during the read, <b>2</b> by the end</pre>
+    </div>
+    <div class="note"><span><b>One reload per key.</b> A second reader that finds the same key stale joins the
+      reload already running instead of starting another, and a reload that raises keeps the old value and
+      calls <code>refresh.on_failure</code>. Hand the cache a way to start a task
+      (<code>spawn=fn(task) { group.spawn_bg(task) }</code>) and it runs the reloads itself; without one they
+      wait for <code>settle</code>. The synchronous cache never refreshes: it has nowhere to run the task.</span></div>
+  </section>
+
+  <section class="chapter panel" id="outlive">
+    <span class="chapter__eyebrow">08 / OUTLIVE</span>
+    <h2>Outlive the process</h2>
+    <p>Memory is the first tier. <code>DiskCache</code> puts a bounded file behind it: every write appends a
+      record, a read that misses memory is answered from the file and put back, and the file has a budget of
+      its own. When that budget is spent, the record that has been seen least often is the one that goes, so a
+      scan of one-off keys cannot walk the file clean.</p>
+    <div class="label">
+<pre><code><span class="c-key">async fn</span> keep(path : <span class="c-pkg">String</span>) <span class="c-key">-&gt;</span> <span class="c-pkg">Unit</span> <span class="c-key">raise</span> {
+  <span class="c-key">let</span> disk = <span class="c-pkg">@disk</span>.<span class="c-fn">DiskCache::open</span>(
+    <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">8</span>),
+    path,
+    <span class="c-key">fn</span>(key : <span class="c-pkg">String</span>) { <span class="c-pkg">@utf8</span>.<span class="c-fn">encode</span>(key) },
+    <span class="c-key">fn</span>(bytes) { <span class="c-pkg">Some</span>(<span class="c-pkg">@utf8</span>.<span class="c-fn">decode_lossy</span>(bytes)) },
+    <span class="c-key">fn</span>(value : <span class="c-pkg">String</span>) { <span class="c-pkg">@utf8</span>.<span class="c-fn">encode</span>(value) },
+    <span class="c-key">fn</span>(bytes) { <span class="c-pkg">Some</span>(<span class="c-pkg">@utf8</span>.<span class="c-fn">decode_lossy</span>(bytes)) },
+    max_bytes=<span class="c-num">64L</span>, <span class="c-com">// room for three 16-byte records</span>
+  )
+  disk.<span class="c-fn">set</span>(<span class="c-str">"draft"</span>, <span class="c-str">"one"</span>)
+  disk.<span class="c-fn">set</span>(<span class="c-str">"draft"</span>, <span class="c-str">"two"</span>)   <span class="c-com">// the same key again: seen twice</span>
+  disk.<span class="c-fn">set</span>(<span class="c-str">"scan-1"</span>, <span class="c-str">"x"</span>)
+  disk.<span class="c-fn">set</span>(<span class="c-str">"scan-2"</span>, <span class="c-str">"y"</span>)
+  disk.<span class="c-fn">set</span>(<span class="c-str">"keep-me"</span>, <span class="c-str">"z"</span>)  <span class="c-com">// seen once, and the budget is spent</span>
+  <span class="c-key">let</span> s = disk.<span class="c-fn">stats</span>()
+  <span class="c-fn">println</span>(<span class="c-str">"the file holds \{s.entries} records in \{s.bytes} bytes, \{s.denied} turned away"</span>)
+  <span class="c-fn">println</span>(<span class="c-str">"keep-me is in memory: \{disk.contains("keep-me")}"</span>)
+  <span class="c-key">let</span> again = <span class="c-pkg">@disk</span>.<span class="c-fn">DiskCache::open</span>(<span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">8</span>), path,
+    <span class="c-key">fn</span>(key : <span class="c-pkg">String</span>) { <span class="c-pkg">@utf8</span>.<span class="c-fn">encode</span>(key) }, <span class="c-key">fn</span>(bytes) { <span class="c-pkg">Some</span>(<span class="c-pkg">@utf8</span>.<span class="c-fn">decode_lossy</span>(bytes)) },
+    <span class="c-key">fn</span>(value : <span class="c-pkg">String</span>) { <span class="c-pkg">@utf8</span>.<span class="c-fn">encode</span>(value) }, <span class="c-key">fn</span>(bytes) { <span class="c-pkg">Some</span>(<span class="c-pkg">@utf8</span>.<span class="c-fn">decode_lossy</span>(bytes)) },
+    max_bytes=<span class="c-num">64L</span>)
+  <span class="c-fn">println</span>(<span class="c-str">"after reopening, keep-me is there: \{again.contains("keep-me")}"</span>)
+}</code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre>the file holds <b>3</b> records in <b>49</b> bytes, <b>1</b> turned away
+keep-me is in memory: <b>true</b>
+after reopening, keep-me is there: <b>false</b></pre>
+    </div>
+    <div class="note"><span><b>In a browser.</b> <code>@moonkart/storage</code> is the same contract over a
+      store of strings: <code>local_storage()</code> binds the browser's own, the rules for budget, eviction
+      and admission are the file's, and <code>watch()</code> drops this page's copy of a key when another tab
+      writes it. <code>admission=@policy.TakeAll</code> keeps everything that fits instead of deciding by how
+      often a key was seen.</span></div>
   </section>
 
   <nav class="pager">

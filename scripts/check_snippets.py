@@ -3,7 +3,8 @@
 A reader pastes these blocks into a project, so each one has to compile as written. The blocks of
 one file are read in order, the way the page reads: a block may use a name that an earlier block of
 the same file defined. `<!-- nocheck -->` on the line above a block skips it; a block opened with
-```` ```mbt native ```` is checked on the native target only.
+```` ```mbt native ```` is checked on the native target only, and one opened with
+```` ```mbt js ```` on the js target.
 
 Usage: python scripts/check_snippets.py [--moon moon] [file ...]
 """
@@ -62,7 +63,9 @@ def blocks(path):
         # The contents of a `moon.pkg` or `moon.mod` shown in a block are configuration, not code.
         if re.match(r"(?:\s*//[^\n]*\n)*\s*(import \{|options\(|name\s*=|pkgtype\()", m.group(4)):
             continue
-        yield text[: m.start(4)].count("\n") + 1, "native" in m.group(3), m.group(4)
+        modifier = m.group(3)
+        target = "native" if "native" in modifier else "js" if "js" in modifier else "all"
+        yield text[: m.start(4)].count("\n") + 1, target, m.group(4)
 
 
 def program(items):
@@ -102,8 +105,8 @@ def main():
         if not file.exists():
             continue
         found = list(blocks(file))
-        for native in (False, True):
-            items = [(line, body) for line, nat, body in found if nat == native]
+        for target in ("all", "native", "js"):
+            items = [(line, body) for line, want, body in found if want == target]
             if not items:
                 continue
             code, spans = program(items)
@@ -119,7 +122,6 @@ def main():
                 head += '\noptions("is-main": true)\n'
             (pkg / "moon.pkg").write_text(head, encoding="utf-8", newline="\n")
             (pkg / "snippets.mbt").write_text(code, encoding="utf-8", newline="\n")
-            target = "native" if native else "all"
             try:
                 r = subprocess.run([args.moon, "check", "--target", target, str(pkg.relative_to(ROOT))], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
             finally:

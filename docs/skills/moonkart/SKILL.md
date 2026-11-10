@@ -62,6 +62,25 @@ fn sessions(clock : () -> Int64) -> @moonkart.Cache[String, Bytes] {
 
 One write can carry its own deadline instead: `cache.set(key, value, expire_after=ns)`, and `get_with(key, loader, expire_after=ns)` for a loaded value. Such a deadline outranks the cache's rule and no read moves it.
 
+## Refresh a value behind a read
+
+An old value can keep answering while a loader replaces it: `@concurrent` measures a window from the write, so an aged value returns at once and the reload runs behind the read.
+
+```moonbit
+fn polled(
+  clock : () -> Int64,
+  spawn : @concurrent.Spawn, // in a task group: fn(task) { group.spawn_bg(task) }
+) -> @concurrent.AsyncCache[Int, String] {
+  @concurrent.AsyncCache::new(
+    @moonkart.lru_cache(cap=64, clock~),
+    refresh=@concurrent.refresh_every(60_000_000_000L), // stale after a minute
+    spawn~,
+  )
+}
+```
+
+`get_with(key, loader)` starts at most one reload per key; a reload that raises keeps the old value and calls `refresh.on_failure`. `refresh_after=ns` on the call overrides the window, and `settle()` runs whatever is waiting when you gave the cache no `spawn`. The synchronous `Cache` never refreshes on its own.
+
 ## Remember a function
 
 ```moonbit
@@ -96,5 +115,7 @@ pub fn revision() -> String {
 - `removal_listener` hears every entry that leaves, with the reason: `Capacity`, `Expired`, `Explicit` or `Replaced`. `stats()` gives hits, misses and their rates.
 - A weight-bounded cache needs both `max_weight` and a `weigher`; `cap` and `max_weight` are alternatives.
 - `@concurrent.ShardedCache` splits the key space over independent caches with their own budgets. It keeps unrelated traffic from evicting your entries; it does not add parallelism by itself.
-- The disk tier is native only, in `moonbitstack/moonkart/disk`. `max_bytes` bounds the file's live records, a read that misses memory is served from the file and put back, and `stats()` reports promotions, evictions and refusals. Run `compact()` now and then, or the file keeps its dead records.
+- The disk tier is native only, in `moonbitstack/moonkart/disk`; `moonbitstack/moonkart/storage` is the same contract over a store of strings, on the js target with `local_storage()`. `max_bytes` bounds the live records, a read that misses memory is served from the medium and put back, and `stats()` reports promotions, evictions, refusals and denials. The file tier needs `compact()` now and then, or it keeps its dead records.
+- A second tier admits by value by default: a key seen once does not push out a key seen twice. `admission=@policy.TakeAll` keeps everything that fits instead.
+- In a browser page, call `watch()` once so a write in another tab drops this page's copy of that key; without it a page answers from memory that has fallen behind.
 - TinyLFU's frequency sketch is keyed by the runtime's hash seed, so its hit rate moves by a few tenths of a point between seeds; the recency policies do not.
