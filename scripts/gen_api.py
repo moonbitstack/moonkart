@@ -15,19 +15,36 @@ DOCS = ROOT / "docs"
 
 PACKAGES = [
     ("moonbitstack/moonkart", "src", "moonkart",
-     "The cache itself: constructors, reads and writes, expiry, invalidation, and the counters."),
+     "The cache itself: constructors, reads and writes, expiry, invalidation, and the counters.",
+     None),
     ("moonbitstack/moonkart/concurrent", "src/concurrent", "concurrent",
-     "The same cache behind an await, with loads coalesced per key, and the same cache split over independent shards."),
+     "The same cache behind an await, with loads coalesced per key, and the same cache split over independent shards.",
+     None),
     ("moonbitstack/moonkart/policy", "src/policy", "policy",
-     "Eviction policies. The cache sees them only through this contract, so a third-party policy plugs in without touching it."),
+     "Eviction policies. The cache sees them only through this contract, so a third-party policy plugs in without touching it.",
+     None),
     ("moonbitstack/moonkart/disk", "src/disk", "disk",
-     "A memory cache and a bounded file behind it, for the native target."),
+     "A memory cache and a bounded file behind it, for the native target.",
+     "Native only: the filesystem in the standard library is asynchronous and native-only. "
+     "`storage` offers the same contract on the js target."),
+    ("moonbitstack/moonkart/storage", "src/storage", "storage",
+     "The same second tier over a store of strings, such as the browser's localStorage.",
+     "`local_storage()` and `StorageCache::watch` exist on the js target only, where they bind "
+     "`localStorage` and its `storage` event."),
+    ("moonbitstack/moonkart/tier", "src/tier", "tier",
+     "The bookkeeping both second tiers share: which keys a slower medium holds, how big they are, and who leaves.",
+     None),
 ]
 
 DOC_BLOCK = re.compile(r"((?:^[ \t]*///.*\n)+)", re.M)
 DECL = re.compile(
-    r"^[ \t]*(?:pub[ \t]+)?(?:fn|struct|enum|let)(?:[ \t]+|(?=\[))"
-    r"(?:\[[^\]]*\][ \t]*)?([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)?)",
+    r"^[ \t]*"
+    # `pub using @tier {type Stats}`: the item it re-exports is the one described
+    r"(?:pub[ \t]+using[ \t]+\S+[ \t]*\{[ \t]*(?:type|let|fn)[ \t]+"
+    r"([A-Za-z_][A-Za-z0-9_]*)"
+    r"|(?:pub(?:[ \t]*\([a-z]+\))?[ \t]+)?"
+    r"(?:fn|struct|enum|let|trait|type)(?:[ \t]+|(?=\[))"
+    r"(?:\[[^\]]*\][ \t]*)?([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)?))",
     re.M,
 )
 
@@ -56,7 +73,7 @@ def collect_docs(directory: pathlib.Path) -> dict:
                 lines.append(line)
             if not lines:
                 continue
-            name = decl.group(1)
+            name = decl.group(1) or decl.group(2)
             # `Cache::get` keeps its own entry, so a method is not described by
             # the paragraph above its type.
             found.setdefault(name, " ".join(lines))
@@ -67,18 +84,20 @@ def split_signature(line: str):
     """Split an mbti line into a kind, a display name, and the signature."""
     kind = "value"
     body = line
-    if body.startswith("pub(all) "):
-        body = body[len("pub(all) "):]
-    elif body.startswith("pub "):
-        body = body[4:]
-    shown = body
-    for word in ("fn", "struct", "enum", "type", "let", "impl", "trait"):
-        # `fn[K, V] name(...)` has no space between the keyword and its generics
-        if body.startswith(word + " ") or body.startswith(word + "["):
-            kind = word
-            body = body[len(word):].lstrip()
+    for prefix in ("pub(all) ", "pub(open) ", "pub "):
+        if body.startswith(prefix):
+            body = body[len(prefix):]
             break
-    body = body.strip()
+    shown = body
+    # `async fn` is one declaration, and the modifier sits before the keyword
+    probe = body[len("async "):] if body.startswith("async ") else body
+    for word in ("fn", "struct", "enum", "type", "let", "using", "trait", "impl"):
+        # `fn[K, V] name(...)` has no space between the keyword and its generics
+        if probe.startswith(word + " ") or probe.startswith(word + "["):
+            kind = word
+            probe = probe[len(word):].lstrip()
+            break
+    body = probe.strip()
     # drop a generic parameter list to find the name
     name_text = body
     if name_text.startswith("["):
@@ -92,23 +111,50 @@ def split_signature(line: str):
                     name_text = name_text[i + 1:].strip()
                     break
     name = re.match(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)?)", name_text)
+    if kind == "using":
+        # `using @tier {type Stats}` is described by the item it re-exports
+        re_exported = re.search(r"(?:type|let|fn)\s+([A-Za-z_][A-Za-z0-9_]*)", shown)
+        if re_exported:
+            return kind, re_exported.group(1), shown
     return kind, (name.group(1) if name else body[:40]), shown.rstrip("{").strip()
+
+
+DECLARATION = re.compile(r"^pub(?:\s*\([a-z]+\))?\s+")
+
+TRAIT_HEAD = re.compile(r"^pub(?:\s*\(open\))?\s+trait\s+([A-Za-z_][A-Za-z0-9_]*)")
 
 
 def parse_mbti(path: pathlib.Path):
     """Yield (section, kind, name, signature) for each public declaration."""
     section = "Values"
+    trait = None
     for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.rstrip()
-        if line.startswith("// "):
-            section = line[3:].strip()
+        line = raw.strip()
+        if raw.startswith("// "):
+            section = raw[3:].strip()
             continue
-        if not line.startswith("pub "):
+        head = TRAIT_HEAD.match(line)
+        if head:
+            trait = head.group(1)
+            kind, name, sig = split_signature(line)
+            yield section, kind, name, sig
             continue
-        if line.strip() in ("pub struct", "pub enum"):
+        if trait is not None:
+            if line == "}":
+                trait = None
+                continue
+            if line.startswith("fn ") or line.startswith("pub fn "):
+                kind, name, sig = split_signature(
+                    line if line.startswith("pub ") else "pub " + line
+                )
+                # a method of a trait is reached through the trait, so it is
+                # named that way and keeps the trait's own paragraph above it
+                yield section, kind, f"{trait}::{name}", f"fn {sig[len('fn '):]}"
+                continue
+        if not DECLARATION.match(line):
             continue
         kind, name, sig = split_signature(line)
-        if name in ("struct", "enum"):
+        if name in ("struct", "enum", "trait"):
             continue
         yield section, kind, name, sig
 
@@ -116,6 +162,7 @@ def parse_mbti(path: pathlib.Path):
 def prose(text: str) -> str:
     """Escape prose, then let `code` and [name] keep their meaning as code."""
     out = html.escape(text)
+    out = re.sub(r"\[`([^`]+)`\]", r"<code>\1</code>", out)
     out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
     out = re.sub(r"\[([^\]]+)\]", r"<code>\1</code>", out)
     return out
@@ -124,7 +171,7 @@ def prose(text: str) -> str:
 def render() -> str:
     toc = []
     body = []
-    for module, folder, anchor, blurb in PACKAGES:
+    for module, folder, anchor, blurb, note in PACKAGES:
         mbti = ROOT / folder / "pkg.generated.mbti"
         if not mbti.exists():
             continue
@@ -132,8 +179,7 @@ def render() -> str:
         groups: dict[str, list] = {}
         for section, kind, name, sig in parse_mbti(mbti):
             owner = name.split("::")[0]
-            key = "Types" if "::" in name else section
-            groups.setdefault(key, []).append(
+            groups.setdefault(section, []).append(
                 (kind, name, sig, docs.get(name) or docs.get(owner, ""))
             )
 
@@ -141,35 +187,56 @@ def render() -> str:
                    f'<span class="chapter__eyebrow">{html.escape(module)}</span>',
                    f'<h2>{html.escape(module.split("/")[-1])}</h2>',
                    f'<p>{html.escape(blurb)}</p>']
+        if note:
+            heading.append(f'<div class="note"><span>{prose(note)}</span></div>')
         if not groups:
             # A package whose files are all gated to one target has no interface
             # to dump. Name it anyway, and say where its reference is.
             toc.append(f'<li><a href="#{anchor}">{module.split("/")[-1]}</a></li>')
             heading.append(
-                '<p>Native only, so the functions are not part of this generated '
-                'reference. The readme\'s <i>Hybrid memory and disk</i> section is '
-                'the reference for them.</p>'
+                '<p>Every file of this package is gated to one target, so the '
+                'interface dump is empty and the readme is its reference. Give the '
+                'module a canonical backend on that target to list it here.</p>'
             )
             heading.append("</section>")
             body.append("\n".join(heading))
             continue
         toc.append(f'<li><a href="#{anchor}">{module.split("/")[-1]}</a></li>')
         parts = list(heading)
-        for section in ("Values", "Types", "Errors"):
+        order = ["Values", "Types and methods", "Type aliases", "Errors", "Traits"]
+        for section in order + [s for s in groups if s not in order]:
             items = groups.get(section)
             if not items:
                 continue
             label = {"Values": "Functions and values",
-                     "Types": "Types and methods",
-                     "Errors": "Errors"}[section]
+                     "Type aliases": "Type aliases"}.get(section, section)
             parts.append(f'<h3 class="api__h">{label}</h3><dl class="api">')
             for kind, name, sig, doc in sorted(items, key=lambda row: row[1].lower()):
+                if kind == "impl":
+                    # an impl carries no prose of its own; say what it is instead
+                    # of leaving a hole in the page
+                    target = sig[len("impl "):]
+                    parts_of = target.split(" for ")
+                    doc = (
+                        f"Implements the methods of `{parts_of[0]}` for "
+                        f"`{parts_of[1]}`." if len(parts_of) == 2 else ""
+                    )
                 shown = html.escape(sig)
                 parts.append(f'<dt><code>{shown}</code></dt>')
                 parts.append(f'<dd>{prose(doc) if doc else "<span class=\'api__none\'>No description yet.</span>"}</dd>')
             parts.append("</dl>")
         parts.append("</section>")
-        body.append("\n".join(parts))
+        rendered = "\n".join(parts)
+        missing = [
+            shown
+            for line in mbti.read_text(encoding="utf-8").splitlines()
+            if (shown := split_signature(line.strip())[2])
+            and line.strip().startswith("pub")
+            and html.escape(shown) not in rendered
+        ]
+        if missing:
+            raise SystemExit(f"{module}: not listed: {missing}")
+        body.append(rendered)
 
     nav = "\n".join(f"      {item}" for item in toc)
     return f"""<!doctype html>

@@ -44,6 +44,8 @@
       <li><a href="#concurrent">concurrent</a></li>
       <li><a href="#policy">policy</a></li>
       <li><a href="#disk">disk</a></li>
+      <li><a href="#storage">storage</a></li>
+      <li><a href="#tier">tier</a></li>
   </ol>
 </aside>
 
@@ -56,13 +58,13 @@
 <dt><code>fn[K, V] default_config() -&gt; Config[K, V]</code></dt>
 <dd>A config with every knob at its default: no weigher (each entry weighs one), the system clock, no expiry, no listener.</dd>
 <dt><code>fn[K, V] infallible_loader((K) -&gt; V) -&gt; (K) -&gt; V raise</code></dt>
-<dd>Adapts an infallible loader to the raising loader type <code><code>get_with</code></code> and <code><code>try_get_with</code></code> accept. Use it when producing a value cannot fail, so the call site needs no error handling while still sharing one read path.</dd>
+<dd>Adapts an infallible loader to the raising loader type <code>get_with</code> and <code>try_get_with</code> accept. Use it when producing a value cannot fail, so the call site needs no error handling while still sharing one read path.</dd>
 <dt><code>fn[K : Eq + Hash, V] lru_cache(cap? : Int64, max_weight? : Int64, weigher? : (K, V) -&gt; Int64, clock? : () -&gt; Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -&gt; Unit) -&gt; Cache[K, V]</code></dt>
 <dd>A cache that evicts least-recently-used entries.</dd>
 <dt><code>fn[K : Eq + Hash, V] new(&amp;@policy.Policy, weigher? : (K, V) -&gt; Int64, clock? : () -&gt; Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -&gt; Unit) -&gt; Cache[K, V]</code></dt>
 <dd>Builds a cache from a policy and the individual knobs. Capacity belongs to the policy: pass <code>cap</code> or <code>max_weight</code> to the policy preset, not here.</dd>
 <dt><code>fn[K : Eq + Hash, V] new_with_config(&amp;@policy.Policy, Config[K, V]) -&gt; Cache[K, V]</code></dt>
-<dd>Builds a cache from a policy and a <code><code>Config</code></code> bundle.</dd>
+<dd>Builds a cache from a policy and a <code>Config</code> bundle.</dd>
 <dt><code>fn[K : Eq + Hash, V] s3fifo_cache(cap? : Int64, max_weight? : Int64, weigher? : (K, V) -&gt; Int64, clock? : () -&gt; Int64, expiry? : Expiry[K, V], removal_listener? : (K, V, EvictionReason) -&gt; Unit) -&gt; Cache[K, V]</code></dt>
 <dd>A cache using the S3-FIFO-inspired second-chance FIFO: entries that were read since they entered get another round before eviction, which resists scan and one-hit-wonder patterns.</dd>
 <dt><code>fn system_clock() -&gt; Int64</code></dt>
@@ -75,6 +77,8 @@
 <dd>Time-to-live measured from creation: the entry expires <code>duration</code> nanoseconds after it is written and is not refreshed by reads.</dd>
 </dl>
 <h3 class="api__h">Types and methods</h3><dl class="api">
+<dt><code>struct Cache[K, V]</code></dt>
+<dd>A bounded cache generic over key <code>K</code> and value <code>V</code>. The eviction strategy is erased behind the open <code>Policy</code> contract, so one <code>Cache</code> type serves every strategy; <code>new</code> accepts a third-party policy without changing this type. The default strategy, chosen by <code>tinylfu_cache</code>, is W-TinyLFU; <code>lru_cache</code> and <code>s3fifo_cache</code> provide the other shipped strategies.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::contains(Self[K, V], K) -&gt; Bool</code></dt>
 <dd>Whether <code>key</code> is present and not expired. Expired entries are purged and report as absent. This is a presence check: it neither refreshes a time-to-idle deadline nor counts a hit.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::entry(Self[K, V], K) -&gt; Entry[K, V]</code></dt>
@@ -84,13 +88,15 @@
 <dt><code>fn[K : Eq + Hash, V] Cache::get(Self[K, V], K) -&gt; V?</code></dt>
 <dd>Returns the value for <code>key</code>, or <code>None</code> if absent or expired. A successful read counts a hit and bumps the entry&#x27;s recency; an expired or missing read counts a miss.</dd>
 <dt><code>fn[K : Eq + Hash, V, E : Error] Cache::get_with(Self[K, V], K, (K) -&gt; V raise E, expire_after? : Int64) -&gt; V raise E</code></dt>
-<dd>Returns the value for <code>key</code>. On a miss, runs <code>loader(key)</code> and stores the result. The loader may raise; a raised error is not cached, is counted as a load failure, and is handed to the caller unchanged. <code>expire_after</code> does to the loaded value what it does to <code><code>set</code></code>.</dd>
+<dd>Returns the value for <code>key</code>. On a miss, runs <code>loader(key)</code> and stores the result. The loader may raise; a raised error is not cached, is counted as a load failure, and is handed to the caller unchanged. <code>expire_after</code> does to the loaded value what it does to <code>set</code>.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::invalidate(Self[K, V], K) -&gt; Bool</code></dt>
 <dd>Removes <code>key</code> explicitly (alias of <code>remove</code>). Returns whether it was present.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::invalidate_all(Self[K, V]) -&gt; Unit</code></dt>
 <dd>Removes every entry, reporting each to the removal listener as <code>Explicit</code>.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::invalidate_if(Self[K, V], (K, V) -&gt; Bool) -&gt; Int64</code></dt>
 <dd>Removes every entry for which <code>pred(key, value)</code> is true. Returns the number removed.</dd>
+<dt><code>fn[K, V] Cache::now(Self[K, V]) -&gt; Int64</code></dt>
+<dd>The clock&#x27;s current reading — the one the cache compares deadlines and write times against.</dd>
 <dt><code>fn[K, V] Cache::policy_size(Self[K, V]) -&gt; Int32</code></dt>
 <dd>Number of entries the eviction policy currently tracks (equals <code>size</code>).</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::remove(Self[K, V], K) -&gt; Bool</code></dt>
@@ -105,12 +111,32 @@
 <dd>A snapshot of every live entry as <code>(key, value)</code> pairs, in no particular order. Useful for persistence and for tests.</dd>
 <dt><code>fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(Self[K, V], K, (K) -&gt; V? raise E, expire_after? : Int64) -&gt; V? raise E</code></dt>
 <dd>Like <code>get_with</code>, but <code>loader</code> may return <code>None</code> to signal &quot;no value&quot;; such a result is not cached and <code>None</code> is returned. A raised error propagates to the caller and is counted as a load failure.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::written_at(Self[K, V], K) -&gt; Int64?</code></dt>
+<dd>The clock reading at which the live value for <code>key</code> was written, or <code>None</code> if the key is absent or expired. A write of any kind counts, so a value the caller stored and a value a loader produced age the same way.</dd>
+<dt><code>struct CacheStats</code></dt>
+<dd>Counters the cache keeps while it runs. The raw counts are exposed so callers can aggregate them; <code>hit_rate</code> and <code>miss_rate</code> are derived.</dd>
 <dt><code>fn CacheStats::hit_rate(Self) -&gt; Double</code></dt>
 <dd>Fraction of reads that hit, in <code>0.0 ..= 1.0</code>. Zero reads reports <code>0.0</code> rather than dividing by zero.</dd>
 <dt><code>fn CacheStats::merge(Self, Self) -&gt; Self</code></dt>
 <dd>Two sets of counters added together, for a cache split into shards or a report built from several caches.</dd>
 <dt><code>fn CacheStats::miss_rate(Self) -&gt; Double</code></dt>
 <dd>Fraction of reads that missed, in <code>0.0 ..= 1.0</code>.</dd>
+<dt><code>struct Config[K, V]</code></dt>
+<dd>The cross-cutting knobs of a cache, bundled so they can be built once and reused across caches. Capacity lives on the eviction policy, not here. <code>default_config</code> fills in every knob; write the record out when one of them differs, and hand the result to <code>new_with_config</code>.</dd>
+<dt><code>struct Entry[K, V]</code></dt>
+<dd>An entry as seen by a reader: its value, weight and absolute expiry deadline (if any).</dd>
+<dt><code>enum EvictionReason</code></dt>
+<dd>Why an entry left the cache.</dd>
+<dt><code>struct Expiry[K, V]</code></dt>
+<dd>Per-entry lifetime policy. Each callback returns an absolute nanosecond deadline, or <code>None</code> to leave the existing deadline untouched (when the callback does not apply) or to let the entry live until capacity eviction (on create). <code>after_read</code> and <code>after_update</code> receive the current deadline so they can extend or keep it. A pure time-to-live from creation uses <code>ttl</code>; a time-to-idle (idle) lifetime uses <code>tti</code>; anything else is expressed with the three callbacks directly.</dd>
+</dl>
+<h3 class="api__h">Type aliases</h3><dl class="api">
+<dt><code>type Clock = () -&gt; Int64</code></dt>
+<dd>A clock returns the current time in nanoseconds. The cache never reads the wall clock itself; every timestamp it compares comes from a clock the caller supplies, so expiry and load timing stay deterministic under test.</dd>
+<dt><code>type RemovalListener[K, V] = (K, V, EvictionReason) -&gt; Unit</code></dt>
+<dd>Receives every entry the cache removes, together with the reason it left.</dd>
+<dt><code>type Weigher[K, V] = (K, V) -&gt; Int64</code></dt>
+<dd>Weighs an entry so the cache can bound total weight instead of entry count. Return a positive number; the cache treats the result as the entry&#x27;s weight and evicts by weight when the policy&#x27;s maximum weight is set.</dd>
 </dl>
 </section>
 <section class="chapter chapter--long panel" id="concurrent">
@@ -120,18 +146,34 @@
 <h3 class="api__h">Functions and values</h3><dl class="api">
 <dt><code>let default_shards : Int32</code></dt>
 <dd>How many shards a cache gets when the caller does not say. Eight is enough that a busy key crowds out little else, and small enough that each shard still holds a working set worth keeping.</dd>
+<dt><code>fn[K] refresh_every(Int64) -&gt; Refresh[K]</code></dt>
+<dd>A refresh window of <code>ns</code> nanoseconds after the write, with nothing listening for failures.</dd>
 </dl>
 <h3 class="api__h">Types and methods</h3><dl class="api">
+<dt><code>struct AsyncCache[K, V]</code></dt>
+<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
 <dt><code>fn[K : Eq + Hash, V] AsyncCache::get(Self[K, V], K) -&gt; V?</code></dt>
 <dd>Reads <code>key</code>, or <code>None</code>.</dd>
+<dt><code>async fn[K : Eq + Hash, V] AsyncCache::get_with(Self[K, V], K, async (K) -&gt; V, refresh_after? : Int64) -&gt; V</code></dt>
+<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
 <dt><code>fn[K, V] AsyncCache::inner(Self[K, V]) -&gt; @moonkart.Cache[K, V]</code></dt>
 <dd>The synchronous cache underneath, for callers that already hold it.</dd>
-<dt><code>fn[K : Eq + Hash, V] AsyncCache::new(@moonkart.Cache[K, V]) -&gt; Self[K, V]</code></dt>
-<dd>Wraps a cache so it can be used from asynchronous code.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::new(@moonkart.Cache[K, V], refresh? : Refresh[K], spawn? : (async () -&gt; Unit) -&gt; Unit) -&gt; Self[K, V]</code></dt>
+<dd>Wraps a cache so it can be used from asynchronous code. <code>refresh</code> says when a value is stale enough to reload behind a read; <code>spawn</code> says where that reload runs. Without a <code>spawn</code> the cache never starts one by itself, and <code>settle</code> is how its caller runs what is waiting.</dd>
 <dt><code>fn[K : Eq + Hash, V] AsyncCache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
 <dd>Inserts or replaces <code>key</code>.</dd>
+<dt><code>async fn[K : Eq + Hash, V] AsyncCache::settle(Self[K, V]) -&gt; Unit</code></dt>
+<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dt><code>async fn[K : Eq + Hash, V] AsyncCache::try_get_with(Self[K, V], K, async (K) -&gt; V?, refresh_after? : Int64) -&gt; V?</code></dt>
+<dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dt><code>struct Refresh[K]</code></dt>
+<dd>When a value should be reloaded, and who hears about a reload that failed. A value older than <code>after</code> still answers a read, and the loader runs behind the read to replace it. The same key has one reload in flight at a time, and a reload that raises leaves the old value in place and reports the error to <code>on_failure</code>. <code>None</code> never refreshes on its own: the value stays until it expires or is evicted. Only the asynchronous cache acts on this. The synchronous cache answers a read and returns, with nowhere to run a reload, so a value there changes only when something writes it.</dd>
+<dt><code>struct ShardedCache[K, V]</code></dt>
+<dd>A cache split into independent shards, each with its own entries, its own eviction budget and its own in-flight table. A key always lands in the same shard, so a read or a write behaves exactly as it does on a single cache; what changes is that traffic in one shard cannot evict entries in another, and a slow loader in one shard holds up nothing in the others. The shard is <code>hash(key) modulo shards</code>, so the split is stable across calls and across processes only as far as the runtime&#x27;s hash seed is. The runtime schedules tasks cooperatively, so sharding is not by itself a speed-up: it is the unit a caller can hand to its own threads, and the unit that keeps unrelated workloads from pushing each other out.</dd>
 <dt><code>fn[K : Eq + Hash, V] ShardedCache::get(Self[K, V], K) -&gt; V?</code></dt>
 <dd>Reads <code>key</code> from the shard that holds it, or <code>None</code>.</dd>
+<dt><code>async fn[K : Eq + Hash, V] ShardedCache::get_with(Self[K, V], K, async (K) -&gt; V) -&gt; V</code></dt>
+<dd>A cache split into independent shards, each with its own entries, its own eviction budget and its own in-flight table. A key always lands in the same shard, so a read or a write behaves exactly as it does on a single cache; what changes is that traffic in one shard cannot evict entries in another, and a slow loader in one shard holds up nothing in the others. The shard is <code>hash(key) modulo shards</code>, so the split is stable across calls and across processes only as far as the runtime&#x27;s hash seed is. The runtime schedules tasks cooperatively, so sharding is not by itself a speed-up: it is the unit a caller can hand to its own threads, and the unit that keeps unrelated workloads from pushing each other out.</dd>
 <dt><code>fn[K : Eq + Hash, V] ShardedCache::invalidate(Self[K, V], K) -&gt; Bool</code></dt>
 <dd>Removes <code>key</code> from the shard that holds it. Returns whether it was present.</dd>
 <dt><code>fn[K : Eq + Hash, V] ShardedCache::invalidate_all(Self[K, V]) -&gt; Unit</code></dt>
@@ -148,6 +190,12 @@
 <dd>Number of entries held across all shards.</dd>
 <dt><code>fn[K, V] ShardedCache::stats(Self[K, V]) -&gt; @moonkart.CacheStats</code></dt>
 <dd>The counters of every shard added together.</dd>
+<dt><code>async fn[K : Eq + Hash, V] ShardedCache::try_get_with(Self[K, V], K, async (K) -&gt; V?) -&gt; V?</code></dt>
+<dd>A cache split into independent shards, each with its own entries, its own eviction budget and its own in-flight table. A key always lands in the same shard, so a read or a write behaves exactly as it does on a single cache; what changes is that traffic in one shard cannot evict entries in another, and a slow loader in one shard holds up nothing in the others. The shard is <code>hash(key) modulo shards</code>, so the split is stable across calls and across processes only as far as the runtime&#x27;s hash seed is. The runtime schedules tasks cooperatively, so sharding is not by itself a speed-up: it is the unit a caller can hand to its own threads, and the unit that keeps unrelated workloads from pushing each other out.</dd>
+</dl>
+<h3 class="api__h">Type aliases</h3><dl class="api">
+<dt><code>type Spawn = (async () -&gt; Unit) -&gt; Unit</code></dt>
+<dd>A hand-off for a background reload: the cache gives the caller a task to run and never waits for it. Wrap a task group with <code>spawn=fn(task) { group.spawn_bg(task) }</code>, or collect the tasks and run them yourself, which is what a test wants.</dd>
 </dl>
 </section>
 <section class="chapter chapter--long panel" id="policy">
@@ -167,6 +215,14 @@
 <dd>Fraction of capacity given to the admission window in W-TinyLFU. The window admits new entries before they must earn a place in the main region, so a burst of one-hit wonders does not evict the working set.</dd>
 </dl>
 <h3 class="api__h">Types and methods</h3><dl class="api">
+<dt><code>enum Admission</code></dt>
+<dd>How a newcomer earns a place where room is already taken. The in-memory policies decide this themselves; a second tier over a slower medium takes it as a knob, because there a wrong decision costs a write as well.</dd>
+<dt><code>struct IntrusiveList</code></dt>
+<dd>A doubly linked list keyed by id, with <code>0</code> as the empty marker so valid ids (which start at 1) never collide with it. Every mutable piece lives in a <code>Ref</code> so that copying the list (for example passing it to a method that takes <code>self</code> by value) still mutates the one shared list.</dd>
+<dt><code>struct Link</code></dt>
+<dd>A node of the intrusive doubly linked list used by the LRU-family policies.</dd>
+<dt><code>struct Lru</code></dt>
+<dd>Least-recently-used policy: the entry not touched for the longest time leaves first.</dd>
 <dt><code>fn Lru::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
 <dd>Least-recently-used policy: the entry not touched for the longest time leaves first.</dd>
 <dt><code>fn Lru::forget(Self, Int64) -&gt; Unit</code></dt>
@@ -175,6 +231,14 @@
 <dd>Least-recently-used policy: the entry not touched for the longest time leaves first.</dd>
 <dt><code>fn Lru::size(Self) -&gt; Int32</code></dt>
 <dd>Least-recently-used policy: the entry not touched for the longest time leaves first.</dd>
+<dt><code>impl Policy for Lru</code></dt>
+<dd>Implements the methods of <code>Policy</code> for <code>Lru</code>.</dd>
+<dt><code>impl Policy for S3Fifo</code></dt>
+<dd>Implements the methods of <code>Policy</code> for <code>S3Fifo</code>.</dd>
+<dt><code>impl Policy for Tinylfu</code></dt>
+<dd>Implements the methods of <code>Policy</code> for <code>Tinylfu</code>.</dd>
+<dt><code>struct S3Fifo</code></dt>
+<dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a <code>visited</code> bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
 <dt><code>fn S3Fifo::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
 <dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a <code>visited</code> bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
 <dt><code>fn S3Fifo::forget(Self, Int64) -&gt; Unit</code></dt>
@@ -183,6 +247,18 @@
 <dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a <code>visited</code> bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
 <dt><code>fn S3Fifo::size(Self) -&gt; Int32</code></dt>
 <dd>S3-FIFO-inspired second-chance FIFO: a single FIFO queue with a <code>visited</code> bit per entry. When the queue is over budget, an entry that has been read since it entered is moved back to the tail with its bit cleared, while an entry never read since it entered is evicted. Scan floods and one-hit wonders are evicted on first sight, while repeated keys survive several rounds, at the cost of one boolean per entry.</dd>
+<dt><code>struct Sketch</code></dt>
+<dd>A frequency sketch: four rows of 4-bit counters, sized from the number of entries the caller wants to remember, with the whole table halved once the sample window fills. It answers &quot;how often has this key been seen lately&quot; from a hash alone, so a key keeps its history after it leaves and comes back. The shape follows the sketch behind TinyLFU, as Caffeine and moka implement it: a counter per entry per row (four rows, four times the capacity rounded up to a power of two), counters saturating at 15, and a reset that halves every counter every <code>10 × capacity</code> records. The reset is what keeps the estimate about recent traffic rather than the whole history.</dd>
+<dt><code>fn Sketch::age(Self) -&gt; Unit</code></dt>
+<dd>Halves every counter and the sample count. <code>record</code> runs this when the window fills; calling it directly forgets old traffic at once.</dd>
+<dt><code>fn Sketch::estimate(Self, Int32) -&gt; Int32</code></dt>
+<dd>The estimated frequency of the key whose hash is <code>hash</code>: the smallest of its four counters, which is the estimate the collisions cannot inflate.</dd>
+<dt><code>fn Sketch::new(Int32) -&gt; Self</code></dt>
+<dd>Creates a sketch sized for <code>capacity</code> keys. A capacity below 16 is treated as 16, which is the smallest table whose rows still spread the hashes.</dd>
+<dt><code>fn Sketch::record(Self, Int32) -&gt; Unit</code></dt>
+<dd>Counts one sighting of the key whose hash is <code>hash</code>, halving the whole table first when the sample window is full.</dd>
+<dt><code>struct Tinylfu</code></dt>
+<dd>W-TinyLFU policy: a small admission window feeds a segmented LRU (probation and protected) that is guarded by a frequency sketch keyed by the entry&#x27;s key hash, so often-read keys survive even after they age out of recency. This is the cache&#x27;s default strategy.</dd>
 <dt><code>fn Tinylfu::admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
 <dd>W-TinyLFU policy: a small admission window feeds a segmented LRU (probation and protected) that is guarded by a frequency sketch keyed by the entry&#x27;s key hash, so often-read keys survive even after they age out of recency. This is the cache&#x27;s default strategy.</dd>
 <dt><code>fn Tinylfu::forget(Self, Int64) -&gt; Unit</code></dt>
@@ -192,12 +268,157 @@
 <dt><code>fn Tinylfu::size(Self) -&gt; Int32</code></dt>
 <dd>W-TinyLFU policy: a small admission window feeds a segmented LRU (probation and protected) that is guarded by a frequency sketch keyed by the entry&#x27;s key hash, so often-read keys survive even after they age out of recency. This is the cache&#x27;s default strategy.</dd>
 </dl>
+<h3 class="api__h">Traits</h3><dl class="api">
+<dt><code>trait Policy</code></dt>
+<dd>A pluggable eviction policy. The cache assigns every entry an opaque numeric id and hands the policy the entry&#x27;s key hash alongside it. Policies that track frequency use the hash, so a key keeps its history across eviction and re-admission even though every insertion gets a fresh id. A policy never sees a key or a value. Implement this trait of your own type and hand the instance to the cache to use a strategy the library does not ship.</dd>
+<dt><code>fn admit(Self, Int64, Int64, Int32) -&gt; Array[Int64]</code></dt>
+<dd>A pluggable eviction policy. The cache assigns every entry an opaque numeric id and hands the policy the entry&#x27;s key hash alongside it. Policies that track frequency use the hash, so a key keeps its history across eviction and re-admission even though every insertion gets a fresh id. A policy never sees a key or a value. Implement this trait of your own type and hand the instance to the cache to use a strategy the library does not ship.</dd>
+<dt><code>fn forget(Self, Int64) -&gt; Unit</code></dt>
+<dd>A pluggable eviction policy. The cache assigns every entry an opaque numeric id and hands the policy the entry&#x27;s key hash alongside it. Policies that track frequency use the hash, so a key keeps its history across eviction and re-admission even though every insertion gets a fresh id. A policy never sees a key or a value. Implement this trait of your own type and hand the instance to the cache to use a strategy the library does not ship.</dd>
+<dt><code>fn hit(Self, Int64, Int32) -&gt; Unit</code></dt>
+<dd>A pluggable eviction policy. The cache assigns every entry an opaque numeric id and hands the policy the entry&#x27;s key hash alongside it. Policies that track frequency use the hash, so a key keeps its history across eviction and re-admission even though every insertion gets a fresh id. A policy never sees a key or a value. Implement this trait of your own type and hand the instance to the cache to use a strategy the library does not ship.</dd>
+<dt><code>fn size(Self) -&gt; Int32</code></dt>
+<dd>A pluggable eviction policy. The cache assigns every entry an opaque numeric id and hands the policy the entry&#x27;s key hash alongside it. Policies that track frequency use the hash, so a key keeps its history across eviction and re-admission even though every insertion gets a fresh id. A policy never sees a key or a value. Implement this trait of your own type and hand the instance to the cache to use a strategy the library does not ship.</dd>
+</dl>
 </section>
 <section class="chapter chapter--long panel" id="disk">
 <span class="chapter__eyebrow">moonbitstack/moonkart/disk</span>
 <h2>disk</h2>
 <p>A memory cache and a bounded file behind it, for the native target.</p>
-<p>Native only, so the functions are not part of this generated reference. The readme's <i>Hybrid memory and disk</i> section is the reference for them.</p>
+<div class="note"><span>Native only: the filesystem in the standard library is asynchronous and native-only. <code>storage</code> offers the same contract on the js target.</span></div>
+<h3 class="api__h">Types and methods</h3><dl class="api">
+<dt><code>struct DiskCache[K, V]</code></dt>
+<dd>A cache backed by both memory and a file. The memory cache answers reads; the file holds a record for every write it keeps, so the cache survives a restart, and the file is itself bounded: <code>max_bytes</code> caps the live records, and when a write would spend the last of the budget the rule in <code>admission</code> decides whether the newcomer or a resident record leaves. Keys and values are encoded with codecs you supply, so the layer stays generic and imposes no wire format of its own. Records restored on open are replayed through <code>set</code>, so the memory cache&#x27;s current capacity and expiry policy apply to them; call <code>compact</code> periodically so the file does not grow without bound.</dd>
+<dt><code>fn[K, V] DiskCache::budget(Self[K, V]) -&gt; Int64</code></dt>
+<dd>The bytes the file&#x27;s live records take, against the budget it was opened with.</dd>
+<dt><code>fn[K, V] DiskCache::cache(Self[K, V]) -&gt; @moonkart.Cache[K, V]</code></dt>
+<dd>The in-memory cache underneath.</dd>
+<dt><code>async fn[K : Eq + Hash, V] DiskCache::compact(Self[K, V]) -&gt; Unit</code></dt>
+<dd>A cache backed by both memory and a file. The memory cache answers reads; the file holds a record for every write it keeps, so the cache survives a restart, and the file is itself bounded: <code>max_bytes</code> caps the live records, and when a write would spend the last of the budget the rule in <code>admission</code> decides whether the newcomer or a resident record leaves. Keys and values are encoded with codecs you supply, so the layer stays generic and imposes no wire format of its own. Records restored on open are replayed through <code>set</code>, so the memory cache&#x27;s current capacity and expiry policy apply to them; call <code>compact</code> periodically so the file does not grow without bound.</dd>
+<dt><code>fn[K : Eq + Hash, V] DiskCache::contains(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>Whether <code>key</code> would be found: in memory, or in the file.</dd>
+<dt><code>async fn[K : Eq + Hash, V] DiskCache::get(Self[K, V], K) -&gt; V?</code></dt>
+<dd>A cache backed by both memory and a file. The memory cache answers reads; the file holds a record for every write it keeps, so the cache survives a restart, and the file is itself bounded: <code>max_bytes</code> caps the live records, and when a write would spend the last of the budget the rule in <code>admission</code> decides whether the newcomer or a resident record leaves. Keys and values are encoded with codecs you supply, so the layer stays generic and imposes no wire format of its own. Records restored on open are replayed through <code>set</code>, so the memory cache&#x27;s current capacity and expiry policy apply to them; call <code>compact</code> periodically so the file does not grow without bound.</dd>
+<dt><code>async fn[K : Eq + Hash, V] DiskCache::open(@moonkart.Cache[K, V], StringView, (K) -&gt; Bytes, (Bytes) -&gt; K?, (V) -&gt; Bytes, (Bytes) -&gt; V?, max_bytes? : Int64, admission? : @policy.Admission) -&gt; Self[K, V]</code></dt>
+<dd>A cache backed by both memory and a file. The memory cache answers reads; the file holds a record for every write it keeps, so the cache survives a restart, and the file is itself bounded: <code>max_bytes</code> caps the live records, and when a write would spend the last of the budget the rule in <code>admission</code> decides whether the newcomer or a resident record leaves. Keys and values are encoded with codecs you supply, so the layer stays generic and imposes no wire format of its own. Records restored on open are replayed through <code>set</code>, so the memory cache&#x27;s current capacity and expiry policy apply to them; call <code>compact</code> periodically so the file does not grow without bound.</dd>
+<dt><code>fn[K, V] DiskCache::path(Self[K, V]) -&gt; String</code></dt>
+<dd>The path this cache persists to.</dd>
+<dt><code>async fn[K : Eq + Hash, V] DiskCache::remove(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>A cache backed by both memory and a file. The memory cache answers reads; the file holds a record for every write it keeps, so the cache survives a restart, and the file is itself bounded: <code>max_bytes</code> caps the live records, and when a write would spend the last of the budget the rule in <code>admission</code> decides whether the newcomer or a resident record leaves. Keys and values are encoded with codecs you supply, so the layer stays generic and imposes no wire format of its own. Records restored on open are replayed through <code>set</code>, so the memory cache&#x27;s current capacity and expiry policy apply to them; call <code>compact</code> periodically so the file does not grow without bound.</dd>
+<dt><code>async fn[K : Eq + Hash, V] DiskCache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
+<dd>A cache backed by both memory and a file. The memory cache answers reads; the file holds a record for every write it keeps, so the cache survives a restart, and the file is itself bounded: <code>max_bytes</code> caps the live records, and when a write would spend the last of the budget the rule in <code>admission</code> decides whether the newcomer or a resident record leaves. Keys and values are encoded with codecs you supply, so the layer stays generic and imposes no wire format of its own. Records restored on open are replayed through <code>set</code>, so the memory cache&#x27;s current capacity and expiry policy apply to them; call <code>compact</code> periodically so the file does not grow without bound.</dd>
+<dt><code>fn[K, V] DiskCache::size(Self[K, V]) -&gt; Int64</code></dt>
+<dd>Number of entries in memory. The file&#x27;s own count is in <code>stats</code>.</dd>
+<dt><code>fn[K, V] DiskCache::stats(Self[K, V]) -&gt; @tier.Stats</code></dt>
+<dd>What the file has done since it was opened.</dd>
+</dl>
+<h3 class="api__h">Type aliases</h3><dl class="api">
+<dt><code>using @tier {type Stats}</code></dt>
+<dd>The counters a second tier reports: live entries, the bytes they take, and how many reads the medium answered, evicted, refused or denied.</dd>
+</dl>
+</section>
+<section class="chapter chapter--long panel" id="storage">
+<span class="chapter__eyebrow">moonbitstack/moonkart/storage</span>
+<h2>storage</h2>
+<p>The same second tier over a store of strings, such as the browser&#x27;s localStorage.</p>
+<div class="note"><span><code>local_storage()</code> and <code>StorageCache::watch</code> exist on the js target only, where they bind <code>localStorage</code> and its <code>storage</code> event.</span></div>
+<h3 class="api__h">Types and methods</h3><dl class="api">
+<dt><code>struct StorageCache[K, V]</code></dt>
+<dd>A cache backed by both memory and a store that outlives the page: the same contract as the file tier, on a medium that is a map of strings. Every write goes to memory and to the store, bounded by <code>max_bytes</code> over the record bytes, with the rule in <code>admission</code> deciding who keeps the last byte. A read that misses memory is answered from the store and put back into memory. Records found on open are restored in the store&#x27;s own order and the memory cache&#x27;s current capacity and expiry policy apply to them.</dd>
+<dt><code>fn[K : Eq + Hash, V] StorageCache::apply_storage_event(Self[K, V], String) -&gt; Bool</code></dt>
+<dd>Drops a key this page still holds because another page wrote it: the memory entry goes, the store&#x27;s newer value stays, and the next read takes it. Returns whether the storage key belonged to this cache. A <code>storage</code> event listener passes it the key of every write another tab makes, which is what <code>StorageCache::watch</code> wires up in a browser.</dd>
+<dt><code>fn[K, V] StorageCache::budget(Self[K, V]) -&gt; Int64</code></dt>
+<dd>The bytes the stored records take, against the budget the cache was opened with.</dd>
+<dt><code>fn[K, V] StorageCache::cache(Self[K, V]) -&gt; @moonkart.Cache[K, V]</code></dt>
+<dd>The in-memory cache underneath.</dd>
+<dt><code>fn[K : Eq + Hash, V] StorageCache::contains(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>Whether <code>key</code> would be found: in memory, or in the store.</dd>
+<dt><code>fn[K : Eq + Hash, V] StorageCache::get(Self[K, V], K) -&gt; V?</code></dt>
+<dd>Reads <code>key</code>. Memory answers first; a miss falls to the store, whose answer is put back into memory so the next read is a memory hit.</dd>
+<dt><code>fn[K : Eq + Hash, V] StorageCache::open(@moonkart.Cache[K, V], &amp;Storage, (K) -&gt; Bytes, (Bytes) -&gt; K?, (V) -&gt; Bytes, (Bytes) -&gt; V?, max_bytes? : Int64, prefix? : String, admission? : @policy.Admission) -&gt; Self[K, V]</code></dt>
+<dd>Wraps <code>cache</code> so every write also lands in <code>storage</code>, and restores what the store already holds. <code>prefix</code> namespaces this cache&#x27;s entries, so two caches on one page keep out of each other&#x27;s way. <code>max_bytes</code> bounds the records kept; without it the store keeps everything written, and an entry larger than the whole budget is refused and stays in memory only.</dd>
+<dt><code>fn[K : Eq + Hash, V] StorageCache::remove(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>Removes <code>key</code> from memory and from the store.</dd>
+<dt><code>fn[K : Eq + Hash, V] StorageCache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
+<dd>Writes <code>key</code> to memory and to the store, then makes room if the budget is spent. A record larger than the whole budget is not written at all: it stays in memory, is counted as refused, and is gone when memory evicts it. A record the admission rule turns away is removed from the store again and counted as denied.</dd>
+<dt><code>fn[K, V] StorageCache::size(Self[K, V]) -&gt; Int64</code></dt>
+<dd>Number of entries in memory. The store&#x27;s own count is in <code>stats</code>.</dd>
+<dt><code>fn[K, V] StorageCache::stats(Self[K, V]) -&gt; @tier.Stats</code></dt>
+<dd>What the store has done since it was opened.</dd>
+<dt><code>fn[K, V] StorageCache::text_of(Self[K, V], K) -&gt; String</code></dt>
+<dd>The storage key this cache keeps <code>key</code> under.</dd>
+</dl>
+<h3 class="api__h">Traits</h3><dl class="api">
+<dt><code>trait Storage</code></dt>
+<dd>A string-keyed store. <code>keys</code> is where restoring starts, so a store that knows the order its entries were written in should return them in it: the entries that do not fit the budget are then the oldest ones.</dd>
+<dt><code>fn get(Self, String) -&gt; String?</code></dt>
+<dd>A string-keyed store. <code>keys</code> is where restoring starts, so a store that knows the order its entries were written in should return them in it: the entries that do not fit the budget are then the oldest ones.</dd>
+<dt><code>fn keys(Self) -&gt; Array[String]</code></dt>
+<dd>A string-keyed store. <code>keys</code> is where restoring starts, so a store that knows the order its entries were written in should return them in it: the entries that do not fit the budget are then the oldest ones.</dd>
+<dt><code>fn remove(Self, String) -&gt; Unit</code></dt>
+<dd>A string-keyed store. <code>keys</code> is where restoring starts, so a store that knows the order its entries were written in should return them in it: the entries that do not fit the budget are then the oldest ones.</dd>
+<dt><code>fn set(Self, String, String) -&gt; Unit</code></dt>
+<dd>A string-keyed store. <code>keys</code> is where restoring starts, so a store that knows the order its entries were written in should return them in it: the entries that do not fit the budget are then the oldest ones.</dd>
+</dl>
+</section>
+<section class="chapter chapter--long panel" id="tier">
+<span class="chapter__eyebrow">moonbitstack/moonkart/tier</span>
+<h2>tier</h2>
+<p>The bookkeeping both second tiers share: which keys a slower medium holds, how big they are, and who leaves.</p>
+<h3 class="api__h">Functions and values</h3><dl class="api">
+<dt><code>fn[K, V] decode_record(BytesView, (Bytes) -&gt; K?, (Bytes) -&gt; V?) -&gt; (K, V)?</code></dt>
+<dd>Decodes one record. <code>None</code> means the bytes are not a record, or a codec refused its half of it.</dd>
+<dt><code>fn[K] encode_delete((K) -&gt; Bytes, K) -&gt; Bytes</code></dt>
+<dd>Encodes a delete record: the file tier&#x27;s way of marking a record dead without rewriting the file.</dd>
+<dt><code>fn[K, V] encode_record((K) -&gt; Bytes, (V) -&gt; Bytes, K, V) -&gt; Bytes</code></dt>
+<dd>Encodes one record. The key and value codecs are the caller&#x27;s, so the bytes are the same whatever the medium is.</dd>
+<dt><code>fn hash_of_bytes(BytesView) -&gt; Int32</code></dt>
+<dd>A hash of a record&#x27;s encoded bytes, for the frequency sketch. FNV-1a is used rather than the runtime&#x27;s key hash because it must give the same answer in every process: a sketch fed by a seeded hash ranks the same traffic differently on every start, and a hit rate measured once could not be reproduced.</dd>
+<dt><code>let record_del : Byte</code></dt>
+<dd>The tag of a record that carries a key alone: the file tier&#x27;s delete.</dd>
+<dt><code>let record_put : Byte</code></dt>
+<dd>The tag of a record that carries a key and a value.</dd>
+</dl>
+<h3 class="api__h">Types and methods</h3><dl class="api">
+<dt><code>struct Record</code></dt>
+<dd>Where a medium keeps one record, and how many bytes it takes there. <code>slot</code> is the medium&#x27;s own address: the file tier&#x27;s offset, or zero for a medium that finds a record by its key.</dd>
+<dt><code>struct Stats</code></dt>
+<dd>What a second tier has done since it was opened. <code>entries</code> and <code>bytes</code> describe the live records, not the size of the medium: a medium that appends keeps the space of superseded and deleted records until it rewrites itself.</dd>
+<dt><code>struct Tier[K]</code></dt>
+<dd>The keys a slower medium holds, with the bookkeeping the two-tier caches share: an index of record sizes and addresses, a least-recently-used order, a frequency sketch and a byte budget. Each method that can free room returns the keys to delete from the medium, so the caller keeps the only copy of the medium&#x27;s own rules. Copies of the value share one set of bookkeeping, so a handle can be passed by value.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::admit(Self[K], K, Int64, Int32) -&gt; Array[K]</code></dt>
+<dd>Indexes a record written to the medium at <code>slot</code>, or replaces the record the key already had. Returns the keys whose records the medium must delete once the budget settles. The newcomer is among them when the admission rule turned it away, which is the caller&#x27;s signal that the record it just wrote must not be replayed as live.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::adopt(Self[K], K, Int64, Int32) -&gt; Array[K]</code></dt>
+<dd>Indexes a record the medium answered a read with: it counts as a promotion, and whatever the budget then pushes out is returned for the medium to delete. A medium shared with another process adopts records this tier never wrote, so adopting is not the same as restoring.</dd>
+<dt><code>fn[K] Tier::budget(Self[K]) -&gt; Int64</code></dt>
+<dd>The byte budget, zero when unbounded.</dd>
+<dt><code>fn[K] Tier::bytes(Self[K]) -&gt; Int64</code></dt>
+<dd>Bytes the live records take.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::contains(Self[K], K) -&gt; Bool</code></dt>
+<dd>Whether the tier holds a record for <code>key</code>.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::discharge(Self[K], K) -&gt; Record?</code></dt>
+<dd>Forgets <code>key</code> and returns its record, if the tier held one. The caller writes the medium&#x27;s own delete.</dd>
+<dt><code>fn[K] Tier::frequency(Self[K], K) -&gt; Int32</code></dt>
+<dd>How often the key whose record this is has been seen lately, at most 15. The estimate comes from the sketch, so it survives the record leaving and coming back.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::keys(Self[K]) -&gt; Array[K]</code></dt>
+<dd>Every key the tier holds, least recently used first.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::new(@policy.Admission, Int64, (K) -&gt; Int32) -&gt; Self[K]</code></dt>
+<dd>A tier bounded by <code>max_bytes</code>, with <code>admission</code> deciding who gets in and <code>hash</code> mapping a key to the hash the sketch counts. A budget of zero or less means unbounded: nothing is ever evicted and the sketch stays empty.</dd>
+<dt><code>fn[K] Tier::note_refused(Self[K]) -&gt; Unit</code></dt>
+<dd>Counts a record the medium would not hold at all, because it alone exceeds the budget.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::promote(Self[K], K) -&gt; Unit</code></dt>
+<dd>Notes that the medium answered a read for <code>key</code>: the record counts as recent and the key counts as seen.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::record_of(Self[K], K) -&gt; Record?</code></dt>
+<dd>The record held for <code>key</code>, if any.</dd>
+<dt><code>fn[K] Tier::record_seen(Self[K], K) -&gt; Unit</code></dt>
+<dd>Counts one sighting of <code>key</code>. Called by the paths that use the medium, so the sketch reflects traffic that reached it rather than traffic that only reached memory.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::restore(Self[K], K, Int64, Int32) -&gt; Unit</code></dt>
+<dd>Indexes a record read back from the medium, without an admission decision and without counting an eviction: a restore reports what the medium already held. Call <code>shrink</code> afterwards to bring a medium that is over budget back inside.</dd>
+<dt><code>fn[K : Eq + Hash] Tier::shrink(Self[K]) -&gt; Array[K]</code></dt>
+<dd>Drops the least recently used records until the budget is met, without asking admission. Returns the keys the medium must delete.</dd>
+<dt><code>fn[K] Tier::stats(Self[K]) -&gt; Stats</code></dt>
+<dd>A snapshot of the counters.</dd>
+</dl>
 </section>
 
   <nav class="pager">

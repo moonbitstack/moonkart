@@ -15,6 +15,10 @@
 // the first record it cannot read in full, which keeps the last durable prefix.
 
 ///|
+
+///|
+/// The counters a second tier reports: live entries, the bytes they take, and
+/// how many reads the medium answered, evicted, refused or denied.
 pub using @tier {type Stats}
 
 ///|
