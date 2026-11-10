@@ -40,6 +40,7 @@ pub fn[K : Eq + Hash, V, E : Error] Cache::get_with(Self[K, V], K, (K) -> V rais
 pub fn[K : Eq + Hash, V] Cache::invalidate(Self[K, V], K) -> Bool
 pub fn[K : Eq + Hash, V] Cache::invalidate_all(Self[K, V]) -> Unit
 pub fn[K : Eq + Hash, V] Cache::invalidate_if(Self[K, V], (K, V) -> Bool) -> Int64
+pub fn[K, V] Cache::now(Self[K, V]) -> Int64
 pub fn[K, V] Cache::policy_size(Self[K, V]) -> Int32
 pub fn[K : Eq + Hash, V] Cache::remove(Self[K, V], K) -> Bool
 pub fn[K : Eq + Hash, V] Cache::set(Self[K, V], K, V, expire_after? : Int64) -> Unit
@@ -47,6 +48,7 @@ pub fn[K, V] Cache::size(Self[K, V]) -> Int64
 pub fn[K, V] Cache::stats(Self[K, V]) -> CacheStats
 pub fn[K, V] Cache::to_array(Self[K, V]) -> Array[(K, V)]
 pub fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(Self[K, V], K, (K) -> V? raise E, expire_after? : Int64) -> V? raise E
+pub fn[K : Eq + Hash, V] Cache::written_at(Self[K, V], K) -> Int64?
 
 pub(all) struct CacheStats {
   mut hit_count : Int64

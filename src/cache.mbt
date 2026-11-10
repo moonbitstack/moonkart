@@ -25,6 +25,9 @@ priv struct Slot[V] {
   expire_at : Int64?
   /// The caller fixed this deadline on the write, so no rule may move it.
   fixed : Bool
+  /// The clock reading at which this value was written, which is what the
+  /// asynchronous layer measures a refresh window from.
+  loaded_at : Int64
 }
 
 ///|
@@ -238,6 +241,7 @@ fn[K : Eq + Hash, V] refresh_read(
           weight: slot.weight,
           expire_at: ne,
           fixed: false,
+          loaded_at: slot.loaded_at,
         }),
       )
     }
@@ -307,6 +311,7 @@ pub fn[K : Eq + Hash, V] Cache::set(
       weight,
       expire_at,
       fixed: expire_after is Some(_),
+      loaded_at: now,
     }),
   )
   ignore(st.val.id_to_key.set(id, key))
@@ -500,6 +505,39 @@ pub fn[K, V] Cache::size(self : Cache[K, V]) -> Int64 {
 /// Number of entries the eviction policy currently tracks (equals `size`).
 pub fn[K, V] Cache::policy_size(self : Cache[K, V]) -> Int32 {
   self.state.val.policy.size()
+}
+
+///|
+/// The clock's current reading — the one the cache compares deadlines and write
+/// times against.
+pub fn[K, V] Cache::now(self : Cache[K, V]) -> Int64 {
+  (self.state.val.clock)()
+}
+
+///|
+/// The clock reading at which the live value for `key` was written, or `None` if
+/// the key is absent or expired. A write of any kind counts, so a value the
+/// caller stored and a value a loader produced age the same way.
+pub fn[K : Eq + Hash, V] Cache::written_at(
+  self : Cache[K, V],
+  key : K,
+) -> Int64? {
+  let st = self.state
+  let now = (st.val.clock)()
+  match st.val.entries.get(key) {
+    None => None
+    Some(slot) =>
+      match slot.expire_at {
+        Some(exp) =>
+          if now >= exp {
+            remove_slot(st, key, slot, Expired)
+            None
+          } else {
+            Some(slot.loaded_at)
+          }
+        None => Some(slot.loaded_at)
+      }
+  }
 }
 
 ///|
