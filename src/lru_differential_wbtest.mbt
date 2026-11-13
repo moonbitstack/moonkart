@@ -70,6 +70,14 @@ fn reference_hits() -> Array[Int32] {
 }
 
 ///|
+/// The keys both references hold once the trace is done, in ascending
+/// order: the state a replay has to leave behind, not only the answers it
+/// gives on the way.
+fn reference_resident() -> Array[Int32] {
+  [0, 2, 12, 14, 20, 21, 23, 24, 26, 28, 32, 40]
+}
+
+///|
 test "lru replays a trace two reference implementations agree on" {
   let keys = reference_trace()
   let want = reference_hits()
@@ -87,4 +95,22 @@ test "lru replays a trace two reference implementations agree on" {
   }
   assert_eq(got, want)
   assert_eq(cache.size(), 12L)
+}
+
+///|
+test "lru ends holding the entries the references hold" {
+  let keys = reference_trace()
+  let want = reference_resident()
+  let cache = lru_cache(cap=12L)
+  for key in keys {
+    match cache.get(key) {
+      Some(_) => ()
+      None => cache.set(key, key)
+    }
+  }
+  let got = cache.to_array().map(fn(pair) { pair.0 })
+  assert_eq(got.length(), want.length())
+  for key in want {
+    assert_eq(got.contains(key), true)
+  }
 }

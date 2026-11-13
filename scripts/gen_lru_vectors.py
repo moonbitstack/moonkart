@@ -92,6 +92,39 @@ def cachetools_hits(keys):
     return out
 
 
+def cachetools_resident(keys):
+    cache = LRUCache(maxsize=CAP)
+    for key in keys:
+        if key in cache:
+            cache[key] = cache[key]
+        else:
+            cache[key] = key
+    return sorted(cache.keys())
+
+
+def stdlib_resident(keys):
+    """Which keys the stdlib cache holds afterwards.
+
+    `functools.lru_cache` does not expose its contents, and a probe would count
+    as a read of the cache it asks about. Each key is therefore asked of its own
+    fresh replay: a hit on that replay means the key survived the whole trace.
+    """
+    residents = []
+    for probe in sorted(set(keys)):
+
+        @functools.lru_cache(maxsize=CAP)
+        def read(key):
+            return key
+
+        for key in keys:
+            read(key)
+        before = read.cache_info().hits
+        read(probe)
+        if read.cache_info().hits == before + 1:
+            residents.append(probe)
+    return residents
+
+
 def array(values, per_line=20):
     rows = []
     for i in range(0, len(values), per_line):
@@ -106,12 +139,23 @@ def main():
     if a != b:
         clash = next(i for i, (x, y) in enumerate(zip(a, b)) if x != y)
         sys.exit(f"the references disagree at request {clash}")
+    ra = stdlib_resident(keys)
+    rb = cachetools_resident(keys)
+    if ra != rb:
+        differ = sorted(set(ra) ^ set(rb))
+        sys.exit(f"the references end holding different entries: {differ}")
     text = HEADER.replace("TOTAL", str(len(keys))).replace("CAP", str(CAP))
     text += array(keys) + "\n}\n\n"
     text += "///|\n"
     text += "/// 1 where the reference reported a hit, 0 where it inserted.\n"
     text += "fn reference_hits() -> Array[Int] {\n"
     text += array(a) + "\n}\n\n"
+    text += "///|\n"
+    text += "/// The keys both references hold once the trace is done, in ascending\n"
+    text += "/// order: the state a replay has to leave behind, not only the answers it\n"
+    text += "/// gives on the way.\n"
+    text += "fn reference_resident() -> Array[Int] {\n"
+    text += array(rb) + "\n}\n\n"
     text += '''///|
 test "lru replays a trace two reference implementations agree on" {
   let keys = reference_trace()
@@ -131,9 +175,27 @@ test "lru replays a trace two reference implementations agree on" {
   assert_eq(got, want)
   assert_eq(cache.size(), 12L)
 }
+
+///|
+test "lru ends holding the entries the references hold" {
+  let keys = reference_trace()
+  let want = reference_resident()
+  let cache = lru_cache(cap=12L)
+  for key in keys {
+    match cache.get(key) {
+      Some(_) => ()
+      None => cache.set(key, key)
+    }
+  }
+  let got = cache.to_array().map(fn(pair) { pair.0 })
+  assert_eq(got.length(), want.length())
+  for key in want {
+    assert_eq(got.contains(key), true)
+  }
+}
 '''
     OUT.write_text(text, encoding="utf-8", newline="\n")
-    print(f"{OUT.relative_to(ROOT)}: {len(keys)} requests, {a.count(1)} hits")
+    print(f"{OUT.relative_to(ROOT)}: {len(keys)} requests, {a.count(1)} hits, {len(rb)} resident")
 
 
 if __name__ == "__main__":
