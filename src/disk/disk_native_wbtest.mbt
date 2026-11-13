@@ -93,3 +93,37 @@ async test "appends keep earlier records without a compact" {
   assert_eq(reopened.get(2), Some(20))
   discard(dir, path)
 }
+
+///|
+async test "a record restored from the file counts as written when the cache opens" {
+  let dir = @fs.tmpdir(prefix="moonkart-disk-clock-")
+  let path = dir + "/cache.bin"
+  let first_tick : @ref.Ref[Int64] = @ref.Ref(0L)
+  let first = DiskCache::open(
+    @moonkart.lru_cache(cap=8L, clock=fn() { first_tick.val }),
+    path,
+    encode_i32,
+    decode_i32,
+    encode_i32,
+    decode_i32,
+  )
+  first.set(1, 10)
+  assert_eq(first.cache().written_at(1), Some(0L))
+  first.compact()
+
+  // A record in the file carries no write time, so a value restored on open
+  // counts as written then: the refresh window starts again with the process
+  // instead of answering the first read as stale.
+  let second_tick : @ref.Ref[Int64] = @ref.Ref(3_600_000_000_000L)
+  let reopened = DiskCache::open(
+    @moonkart.lru_cache(cap=8L, clock=fn() { second_tick.val }),
+    path,
+    encode_i32,
+    decode_i32,
+    encode_i32,
+    decode_i32,
+  )
+  assert_eq(reopened.cache().written_at(1), Some(3_600_000_000_000L))
+  assert_eq(reopened.get(1), Some(10))
+  discard(dir, path)
+}

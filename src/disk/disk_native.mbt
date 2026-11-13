@@ -31,7 +31,9 @@ pub using @tier {type Stats}
 /// Keys and values are encoded with codecs you supply, so the layer stays
 /// generic and imposes no wire format of its own. Records restored on open are
 /// replayed through `set`, so the memory cache's current capacity and expiry
-/// policy apply to them; call `compact` periodically so the file does not grow
+/// policy apply to them, and they count as written when the cache opens: a
+/// record on the file carries no write time, so a refresh window starts again
+/// after a restart. Call `compact` periodically so the file does not grow
 /// without bound.
 pub struct DiskCache[K, V] {
   cache : @moonkart.Cache[K, V]

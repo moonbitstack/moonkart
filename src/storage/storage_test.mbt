@@ -223,3 +223,26 @@ test "the storage keys carry the prefix and the encoded key" {
   assert_eq(disk.text_of(1), "moonkart:01000000")
   assert_eq(store.keys, ["moonkart:01000000"])
 }
+
+///|
+test "a record restored from the store counts as written when the page loads" {
+  let store = fake()
+  let first_tick : Array[Int64] = [0L]
+  let first = stored(
+    store,
+    @moonkart.lru_cache(cap=8L, clock=fn() { first_tick[0] }),
+  )
+  first.set(1, 10)
+  assert_eq(first.cache().written_at(1), Some(0L))
+
+  // The page comes back an hour later. A record on the store carries no write
+  // time, so it counts as written when the cache opens: a refresh window starts
+  // again instead of answering the first read as stale.
+  let second_tick : Array[Int64] = [3_600_000_000_000L]
+  let reopened = stored(
+    store,
+    @moonkart.lru_cache(cap=8L, clock=fn() { second_tick[0] }),
+  )
+  assert_eq(reopened.cache().written_at(1), Some(3_600_000_000_000L))
+  assert_eq(reopened.get(1), Some(10))
+}

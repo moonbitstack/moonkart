@@ -449,7 +449,9 @@ The filesystem in the standard library is asynchronous and native-only, so this
 package is too. It is target-gated: the other backends compile unaffected, and
 `moon check --target all` stays green. Records restored on open are replayed
 through `set`, so the memory cache's current capacity and expiry policy apply to
-them.
+them — and so they count as written when the cache opens. A record on the file
+carries no write time, so a refresh window measured from the write starts again
+after a restart: nothing on the medium can say how old the value is.
 
 ## Second tier in browser storage (js)
 
@@ -493,6 +495,11 @@ the browser's `storage` event and drops this page's copy of whatever the other
 page wrote, so the next read takes the value that was actually written instead of
 answering from memory that has fallen behind. Pass `apply_storage_event(key)`
 yourself if you would rather wire the event your own way.
+
+What the store holds on load is read back through `set`, in the store's own
+order, so the memory cache's capacity and expiry rule apply to it. A stored
+record carries no write time, so a restored value counts as written when the page
+loads, and a refresh window starts again from there.
 
 ## Invalidation
 

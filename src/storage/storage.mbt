@@ -31,7 +31,9 @@ pub(open) trait Storage {
 /// record bytes, with the rule in `admission` deciding who keeps the last byte.
 /// A read that misses memory is answered from the store and put back into
 /// memory. Records found on open are restored in the store's own order and the
-/// memory cache's current capacity and expiry policy apply to them.
+/// memory cache's current capacity and expiry policy apply to them; a stored
+/// record carries no write time, so a restored value counts as written when the
+/// page loads.
 pub struct StorageCache[K, V] {
   cache : @moonkart.Cache[K, V]
   storage : &Storage
