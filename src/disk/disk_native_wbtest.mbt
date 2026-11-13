@@ -127,3 +127,37 @@ async test "a record restored from the file counts as written when the cache ope
   assert_eq(reopened.get(1), Some(10))
   discard(dir, path)
 }
+
+///|
+async test "a reopened record is read back from the place the file gave it" {
+  let dir = @fs.tmpdir(prefix="moonkart-disk-slot-")
+  let path = dir + "/cache.bin"
+  let writer = DiskCache::open(
+    @moonkart.lru_cache(cap=8L),
+    path,
+    encode_i32,
+    decode_i32,
+    encode_i32,
+    decode_i32,
+  )
+  writer.set(1, 10)
+  writer.set(2, 20)
+  writer.set(3, 30)
+  writer.compact()
+
+  // A memory tier of one entry holds only the last restored record, so the other
+  // two are answered from the file at the offset the replay recorded for them.
+  let reader = DiskCache::open(
+    @moonkart.lru_cache(cap=1L),
+    path,
+    encode_i32,
+    decode_i32,
+    encode_i32,
+    decode_i32,
+  )
+  assert_eq(reader.cache().size(), 1L)
+  assert_eq(reader.get(1), Some(10))
+  assert_eq(reader.get(2), Some(20))
+  assert_eq(reader.get(3), Some(30))
+  discard(dir, path)
+}

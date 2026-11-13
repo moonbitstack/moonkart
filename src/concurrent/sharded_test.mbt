@@ -140,14 +140,12 @@ async test "a sweep across the shards counts what it removed" {
     },
   )
   // One key per shard, so the count is a sum and not one shard's answer twice.
-  let mut short = 0
-  while cache.shard_of(short) != 0 {
-    short = short + 1
-  }
-  let mut long = short
-  while cache.shard_of(long) != 1 {
-    long = long + 1
-  }
+  // The search is bounded: an index that stops spreading keys has to fail here,
+  // not run on.
+  let short = key_in_shard(cache, 0, 0)
+  let long = key_in_shard(cache, 1, short + 1)
+  assert_true(short >= 0)
+  assert_true(long >= 0)
   cache.set(short, "a")
   cache.set(long, "b")
   now.val = 10L
@@ -156,4 +154,20 @@ async test "a sweep across the shards counts what it removed" {
   assert_eq(cache.size(), 1L)
   assert_eq(cache.contains(short), false)
   assert_eq(cache.contains(long), true)
+}
+
+///|
+/// The first key at or after `from` that lands in `shard`, or -1 when there is
+/// none within a bounded search.
+fn key_in_shard(
+  cache : @concurrent.ShardedCache[Int32, String],
+  shard : Int32,
+  from : Int32,
+) -> Int32 {
+  for key = from; key < from + 4096; key = key + 1 {
+    if cache.shard_of(key) == shard {
+      return key
+    }
+  }
+  -1
 }
