@@ -264,6 +264,22 @@ pub fn[K : Eq + Hash, V] Cache::set(
   value : V,
   expire_after? : Int64,
 ) -> Unit {
+  ignore(self.insert(key, value, expire_after?))
+}
+
+///|
+/// Inserts or replaces `key` and hands back the value it displaced, which is
+/// `None` when the key was not there. This is [`set`] with the old value
+/// returned, for a caller that has to undo or account for what it replaced;
+/// the removal listener still hears about the replaced value as `Replaced`.
+///
+/// `expire_after` means what it means on `set`.
+pub fn[K : Eq + Hash, V] Cache::insert(
+  self : Cache[K, V],
+  key : K,
+  value : V,
+  expire_after? : Int64,
+) -> V? {
   let st = self.state
   let now = (st.val.clock)()
   let weight = match st.val.weigher {
@@ -294,13 +310,14 @@ pub fn[K : Eq + Hash, V] Cache::set(
           }
       }
   }
-  match previous {
+  let displaced = match previous {
     Some(old) => {
       ignore(st.val.id_to_key.remove(old.id))
       st.val.policy.forget(old.id)
       notify(st.val, key, old.value, Replaced)
+      Some(old.value)
     }
-    None => ()
+    None => None
   }
   let id = st.val.next_id
   st.val.next_id = st.val.next_id + 1
@@ -321,6 +338,7 @@ pub fn[K : Eq + Hash, V] Cache::set(
     ignore(st.val.entries.remove(key))
     ignore(st.val.id_to_key.remove(id))
   }
+  displaced
 }
 
 ///|
@@ -354,6 +372,34 @@ pub fn[K : Eq + Hash, V] Cache::get(self : Cache[K, V], key : K) -> V? {
           st.val.policy.hit(slot.id, Hash::hash(key))
           Some(slot.value)
         }
+      }
+  }
+}
+
+///|
+/// Returns the value for `key` without recording a hit or a miss, moving the
+/// entry's place in the eviction order, or restarting a time-to-idle deadline.
+/// An entry past its deadline is dropped and reported as `Expired`, as it is on
+/// any other read, so a peek never answers with a dead value.
+///
+/// Use it to look at an entry without changing what the cache will evict next:
+/// a metrics sweep, a debug view, or a check made on the side of a read that is
+/// counted elsewhere.
+pub fn[K : Eq + Hash, V] Cache::peek(self : Cache[K, V], key : K) -> V? {
+  let st = self.state
+  let now = (st.val.clock)()
+  match st.val.entries.get(key) {
+    None => None
+    Some(slot) =>
+      match slot.expire_at {
+        Some(exp) =>
+          if now >= exp {
+            remove_slot(st, key, slot, Expired)
+            None
+          } else {
+            Some(slot.value)
+          }
+        None => Some(slot.value)
       }
   }
 }
@@ -496,6 +542,37 @@ pub fn[K, V] Cache::stats(self : Cache[K, V]) -> CacheStats {
 }
 
 ///|
+/// Drops every entry whose deadline has passed, reports each to the removal
+/// listener as `Expired`, and returns how many went.
+///
+/// Expiry is otherwise lazy: an entry past its deadline is dropped when
+/// something asks for it. An entry nobody asks for again keeps its space and its
+/// place in the policy's order until then, which is why a cache that writes more
+/// than it reads needs this sweep. Counters are untouched: a sweep is
+/// housekeeping, not a read.
+pub fn[K : Eq + Hash, V] Cache::purge_expired(self : Cache[K, V]) -> Int64 {
+  let st = self.state
+  let now = (st.val.clock)()
+  let mut gone : Int64 = 0
+  for pair in st.val.entries.to_array() {
+    match pair.1.expire_at {
+      Some(exp) =>
+        if now >= exp {
+          match st.val.entries.get(pair.0) {
+            Some(slot) => {
+              remove_slot(st, pair.0, slot, Expired)
+              gone += 1
+            }
+            None => ()
+          }
+        }
+      None => ()
+    }
+  }
+  gone
+}
+
+///|
 /// Number of entries currently stored.
 pub fn[K, V] Cache::size(self : Cache[K, V]) -> Int64 {
   self.state.val.entries.length().to_int64()
@@ -505,6 +582,23 @@ pub fn[K, V] Cache::size(self : Cache[K, V]) -> Int64 {
 /// Number of entries the eviction policy currently tracks (equals `size`).
 pub fn[K, V] Cache::policy_size(self : Cache[K, V]) -> Int32 {
   self.state.val.policy.size()
+}
+
+///|
+/// The total weight of the entries the cache holds, which is what a weigher
+/// budgets against. Without a weigher every entry weighs one, so this equals
+/// [`size`].
+///
+/// The figure is added up over the entries on each call rather than kept as a
+/// running total, so it is a report and not a hot-path call. Entries whose
+/// deadline has passed still count until something removes them: call
+/// [`purge_expired`] first to report what is live.
+pub fn[K, V] Cache::weight(self : Cache[K, V]) -> Int64 {
+  let mut total : Int64 = 0
+  for pair in self.state.val.entries.to_array() {
+    total += pair.1.weight
+  }
+  total
 }
 
 ///|

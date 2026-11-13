@@ -16,13 +16,22 @@ pub fn[K] refresh_every(Int64) -> Refresh[K]
 pub struct AsyncCache[K, V] {
   // private fields
 }
+pub fn[K : Eq + Hash, V] AsyncCache::contains(Self[K, V], K) -> Bool
 pub fn[K : Eq + Hash, V] AsyncCache::get(Self[K, V], K) -> V?
 pub async fn[K : Eq + Hash, V] AsyncCache::get_with(Self[K, V], K, async (K) -> V, refresh_after? : Int64) -> V
 pub fn[K, V] AsyncCache::inner(Self[K, V]) -> @moonkart.Cache[K, V]
+pub fn[K : Eq + Hash, V] AsyncCache::insert(Self[K, V], K, V) -> V?
+pub fn[K : Eq + Hash, V] AsyncCache::invalidate_all(Self[K, V]) -> Unit
 pub fn[K : Eq + Hash, V] AsyncCache::new(@moonkart.Cache[K, V], refresh? : Refresh[K], spawn? : (async () -> Unit) -> Unit) -> Self[K, V]
+pub fn[K : Eq + Hash, V] AsyncCache::peek(Self[K, V], K) -> V?
+pub fn[K : Eq + Hash, V] AsyncCache::purge_expired(Self[K, V]) -> Int64
+pub fn[K : Eq + Hash, V] AsyncCache::remove(Self[K, V], K) -> Bool
 pub fn[K : Eq + Hash, V] AsyncCache::set(Self[K, V], K, V) -> Unit
 pub async fn[K : Eq + Hash, V] AsyncCache::settle(Self[K, V]) -> Unit
+pub fn[K, V] AsyncCache::size(Self[K, V]) -> Int64
+pub fn[K, V] AsyncCache::stats(Self[K, V]) -> @moonkart.CacheStats
 pub async fn[K : Eq + Hash, V] AsyncCache::try_get_with(Self[K, V], K, async (K) -> V?, refresh_after? : Int64) -> V?
+pub fn[K, V] AsyncCache::weight(Self[K, V]) -> Int64
 
 pub(all) struct Refresh[K] {
   after : Int64?
@@ -32,17 +41,21 @@ pub(all) struct Refresh[K] {
 pub struct ShardedCache[K, V] {
   // private fields
 }
+pub fn[K : Eq + Hash, V] ShardedCache::contains(Self[K, V], K) -> Bool
 pub fn[K : Eq + Hash, V] ShardedCache::get(Self[K, V], K) -> V?
 pub async fn[K : Eq + Hash, V] ShardedCache::get_with(Self[K, V], K, async (K) -> V) -> V
 pub fn[K : Eq + Hash, V] ShardedCache::invalidate(Self[K, V], K) -> Bool
 pub fn[K : Eq + Hash, V] ShardedCache::invalidate_all(Self[K, V]) -> Unit
 pub fn[K : Eq + Hash, V] ShardedCache::new(make~ : (Int32) -> @moonkart.Cache[K, V], shards? : Int32) -> Self[K, V]
+pub fn[K : Eq + Hash, V] ShardedCache::peek(Self[K, V], K) -> V?
+pub fn[K : Eq + Hash, V] ShardedCache::purge_expired(Self[K, V]) -> Int64
 pub fn[K : Eq + Hash, V] ShardedCache::set(Self[K, V], K, V) -> Unit
 pub fn[K : Hash, V] ShardedCache::shard_of(Self[K, V], K) -> Int32
 pub fn[K, V] ShardedCache::shards(Self[K, V]) -> Int32
 pub fn[K, V] ShardedCache::size(Self[K, V]) -> Int64
 pub fn[K, V] ShardedCache::stats(Self[K, V]) -> @moonkart.CacheStats
 pub async fn[K : Eq + Hash, V] ShardedCache::try_get_with(Self[K, V], K, async (K) -> V?) -> V?
+pub fn[K, V] ShardedCache::weight(Self[K, V]) -> Int64
 
 // Type aliases
 pub type Spawn = (async () -> Unit) -> Unit

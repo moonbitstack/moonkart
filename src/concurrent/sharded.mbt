@@ -83,6 +83,25 @@ pub fn[K : Eq + Hash, V] ShardedCache::set(
 }
 
 ///|
+/// Reads `key` without counting a hit or a miss and without moving it in the
+/// eviction order, as `Cache::peek` does.
+pub fn[K : Eq + Hash, V] ShardedCache::peek(
+  self : ShardedCache[K, V],
+  key : K,
+) -> V? {
+  self.shard(key).peek(key)
+}
+
+///|
+/// Whether `key` is present and live in the shard that holds it.
+pub fn[K : Eq + Hash, V] ShardedCache::contains(
+  self : ShardedCache[K, V],
+  key : K,
+) -> Bool {
+  self.shard(key).contains(key)
+}
+
+///|
 /// Reads `key`, running `loader` on a miss. Waiters on the same key share one
 /// loader run; waiters on keys in other shards are unaffected.
 pub async fn[K : Eq + Hash, V] ShardedCache::get_with(
@@ -128,6 +147,29 @@ pub fn[K, V] ShardedCache::size(self : ShardedCache[K, V]) -> Int64 {
   let mut total : Int64 = 0L
   for shard in self.shards {
     total = total + shard.inner().size()
+  }
+  total
+}
+
+///|
+/// The total weight held across all shards, as `Cache::weight` adds it up.
+pub fn[K, V] ShardedCache::weight(self : ShardedCache[K, V]) -> Int64 {
+  let mut total : Int64 = 0L
+  for shard in self.shards {
+    total = total + shard.inner().weight()
+  }
+  total
+}
+
+///|
+/// Sweeps every shard for entries past their deadline, and returns how many went
+/// altogether.
+pub fn[K : Eq + Hash, V] ShardedCache::purge_expired(
+  self : ShardedCache[K, V],
+) -> Int64 {
+  let mut total : Int64 = 0L
+  for shard in self.shards {
+    total = total + shard.inner().purge_expired()
   }
   total
 }

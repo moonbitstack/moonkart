@@ -89,6 +89,8 @@
 <dd>Returns the value for <code>key</code>, or <code>None</code> if absent or expired. A successful read counts a hit and bumps the entry&#x27;s recency; an expired or missing read counts a miss.</dd>
 <dt><code>fn[K : Eq + Hash, V, E : Error] Cache::get_with(Self[K, V], K, (K) -&gt; V raise E, expire_after? : Int64) -&gt; V raise E</code></dt>
 <dd>Returns the value for <code>key</code>. On a miss, runs <code>loader(key)</code> and stores the result. The loader may raise; a raised error is not cached, is counted as a load failure, and is handed to the caller unchanged. <code>expire_after</code> does to the loaded value what it does to <code>set</code>.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::insert(Self[K, V], K, V, expire_after? : Int64) -&gt; V?</code></dt>
+<dd>Inserts or replaces <code>key</code> and hands back the value it displaced, which is <code>None</code> when the key was not there. This is <code>set</code> with the old value returned, for a caller that has to undo or account for what it replaced; the removal listener still hears about the replaced value as <code>Replaced</code>. <code>expire_after</code> means what it means on <code>set</code>.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::invalidate(Self[K, V], K) -&gt; Bool</code></dt>
 <dd>Removes <code>key</code> explicitly (alias of <code>remove</code>). Returns whether it was present.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::invalidate_all(Self[K, V]) -&gt; Unit</code></dt>
@@ -97,8 +99,12 @@
 <dd>Removes every entry for which <code>pred(key, value)</code> is true. Returns the number removed.</dd>
 <dt><code>fn[K, V] Cache::now(Self[K, V]) -&gt; Int64</code></dt>
 <dd>The clock&#x27;s current reading — the one the cache compares deadlines and write times against.</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::peek(Self[K, V], K) -&gt; V?</code></dt>
+<dd>Returns the value for <code>key</code> without recording a hit or a miss, moving the entry&#x27;s place in the eviction order, or restarting a time-to-idle deadline. An entry past its deadline is dropped and reported as <code>Expired</code>, as it is on any other read, so a peek never answers with a dead value. Use it to look at an entry without changing what the cache will evict next: a metrics sweep, a debug view, or a check made on the side of a read that is counted elsewhere.</dd>
 <dt><code>fn[K, V] Cache::policy_size(Self[K, V]) -&gt; Int32</code></dt>
 <dd>Number of entries the eviction policy currently tracks (equals <code>size</code>).</dd>
+<dt><code>fn[K : Eq + Hash, V] Cache::purge_expired(Self[K, V]) -&gt; Int64</code></dt>
+<dd>Drops every entry whose deadline has passed, reports each to the removal listener as <code>Expired</code>, and returns how many went. Expiry is otherwise lazy: an entry past its deadline is dropped when something asks for it. An entry nobody asks for again keeps its space and its place in the policy&#x27;s order until then, which is why a cache that writes more than it reads needs this sweep. Counters are untouched: a sweep is housekeeping, not a read.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::remove(Self[K, V], K) -&gt; Bool</code></dt>
 <dd>Removes <code>key</code> explicitly. Returns whether it was present.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::set(Self[K, V], K, V, expire_after? : Int64) -&gt; Unit</code></dt>
@@ -111,6 +117,8 @@
 <dd>A snapshot of every live entry as <code>(key, value)</code> pairs, in no particular order. Useful for persistence and for tests.</dd>
 <dt><code>fn[K : Eq + Hash, V, E : Error] Cache::try_get_with(Self[K, V], K, (K) -&gt; V? raise E, expire_after? : Int64) -&gt; V? raise E</code></dt>
 <dd>Like <code>get_with</code>, but <code>loader</code> may return <code>None</code> to signal &quot;no value&quot;; such a result is not cached and <code>None</code> is returned. A raised error propagates to the caller and is counted as a load failure.</dd>
+<dt><code>fn[K, V] Cache::weight(Self[K, V]) -&gt; Int64</code></dt>
+<dd>The total weight of the entries the cache holds, which is what a weigher budgets against. Without a weigher every entry weighs one, so this equals <code>size</code>. The figure is added up over the entries on each call rather than kept as a running total, so it is a report and not a hot-path call. Entries whose deadline has passed still count until something removes them: call <code>purge_expired</code> first to report what is live.</dd>
 <dt><code>fn[K : Eq + Hash, V] Cache::written_at(Self[K, V], K) -&gt; Int64?</code></dt>
 <dd>The clock reading at which the live value for <code>key</code> was written, or <code>None</code> if the key is absent or expired. A write of any kind counts, so a value the caller stored and a value a loader produced age the same way.</dd>
 <dt><code>struct CacheStats</code></dt>
@@ -152,24 +160,44 @@
 <h3 class="api__h">Types and methods</h3><dl class="api">
 <dt><code>struct AsyncCache[K, V]</code></dt>
 <dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::contains(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>Whether <code>key</code> is present and live. A presence check: no hit, no idle refresh.</dd>
 <dt><code>fn[K : Eq + Hash, V] AsyncCache::get(Self[K, V], K) -&gt; V?</code></dt>
 <dd>Reads <code>key</code>, or <code>None</code>.</dd>
 <dt><code>async fn[K : Eq + Hash, V] AsyncCache::get_with(Self[K, V], K, async (K) -&gt; V, refresh_after? : Int64) -&gt; V</code></dt>
 <dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
 <dt><code>fn[K, V] AsyncCache::inner(Self[K, V]) -&gt; @moonkart.Cache[K, V]</code></dt>
 <dd>The synchronous cache underneath, for callers that already hold it.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::insert(Self[K, V], K, V) -&gt; V?</code></dt>
+<dd>Inserts or replaces <code>key</code> and hands back the value it displaced, as <code>Cache::insert</code> does.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::invalidate_all(Self[K, V]) -&gt; Unit</code></dt>
+<dd>Removes every entry.</dd>
 <dt><code>fn[K : Eq + Hash, V] AsyncCache::new(@moonkart.Cache[K, V], refresh? : Refresh[K], spawn? : (async () -&gt; Unit) -&gt; Unit) -&gt; Self[K, V]</code></dt>
 <dd>Wraps a cache so it can be used from asynchronous code. <code>refresh</code> says when a value is stale enough to reload behind a read; <code>spawn</code> says where that reload runs. Without a <code>spawn</code> the cache never starts one by itself, and <code>settle</code> is how its caller runs what is waiting.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::peek(Self[K, V], K) -&gt; V?</code></dt>
+<dd>Reads <code>key</code> without counting a hit or a miss and without moving it in the eviction order, as <code>Cache::peek</code> does.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::purge_expired(Self[K, V]) -&gt; Int64</code></dt>
+<dd>Drops every entry past its deadline and returns how many went, as <code>Cache::purge_expired</code> does.</dd>
+<dt><code>fn[K : Eq + Hash, V] AsyncCache::remove(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>Removes <code>key</code>. Returns whether it was present.</dd>
 <dt><code>fn[K : Eq + Hash, V] AsyncCache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
 <dd>Inserts or replaces <code>key</code>.</dd>
 <dt><code>async fn[K : Eq + Hash, V] AsyncCache::settle(Self[K, V]) -&gt; Unit</code></dt>
 <dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dt><code>fn[K, V] AsyncCache::size(Self[K, V]) -&gt; Int64</code></dt>
+<dd>Number of entries held.</dd>
+<dt><code>fn[K, V] AsyncCache::stats(Self[K, V]) -&gt; @moonkart.CacheStats</code></dt>
+<dd>The running counters.</dd>
 <dt><code>async fn[K : Eq + Hash, V] AsyncCache::try_get_with(Self[K, V], K, async (K) -&gt; V?, refresh_after? : Int64) -&gt; V?</code></dt>
 <dd>An asynchronous handle around a cache. Loads are coalesced per key: while one task is computing a value for a key, other tasks asking for the same key wait for that computation instead of starting their own; tasks asking for other keys never wait on it. No lock is held while the loader runs. The only shared mutable state is the in-flight table, whose reads and writes are synchronous, so under the cooperative scheduler they never interleave. The first task to miss records a per-key <code>Lazy</code>, releases the scheduler by awaiting it, and the loader runs outside any shared critical section.</dd>
+<dt><code>fn[K, V] AsyncCache::weight(Self[K, V]) -&gt; Int64</code></dt>
+<dd>The total weight of the entries held, as <code>Cache::weight</code> reports it.</dd>
 <dt><code>struct Refresh[K]</code></dt>
 <dd>When a value should be reloaded, and who hears about a reload that failed. A value older than <code>after</code> still answers a read, and the loader runs behind the read to replace it. The same key has one reload in flight at a time, and a reload that raises leaves the old value in place and reports the error to <code>on_failure</code>. <code>None</code> never refreshes on its own: the value stays until it expires or is evicted. Only the asynchronous cache acts on this. The synchronous cache answers a read and returns, with nowhere to run a reload, so a value there changes only when something writes it.</dd>
 <dt><code>struct ShardedCache[K, V]</code></dt>
 <dd>A cache split into independent shards, each with its own entries, its own eviction budget and its own in-flight table. A key always lands in the same shard, so a read or a write behaves exactly as it does on a single cache; what changes is that traffic in one shard cannot evict entries in another, and a slow loader in one shard holds up nothing in the others. The shard is <code>hash(key) modulo shards</code>, so the split is stable across calls and across processes only as far as the runtime&#x27;s hash seed is. The runtime schedules tasks cooperatively, so sharding is not by itself a speed-up: it is the unit a caller can hand to its own threads, and the unit that keeps unrelated workloads from pushing each other out.</dd>
+<dt><code>fn[K : Eq + Hash, V] ShardedCache::contains(Self[K, V], K) -&gt; Bool</code></dt>
+<dd>Whether <code>key</code> is present and live in the shard that holds it.</dd>
 <dt><code>fn[K : Eq + Hash, V] ShardedCache::get(Self[K, V], K) -&gt; V?</code></dt>
 <dd>Reads <code>key</code> from the shard that holds it, or <code>None</code>.</dd>
 <dt><code>async fn[K : Eq + Hash, V] ShardedCache::get_with(Self[K, V], K, async (K) -&gt; V) -&gt; V</code></dt>
@@ -180,6 +208,10 @@
 <dd>Removes every entry in every shard.</dd>
 <dt><code>fn[K : Eq + Hash, V] ShardedCache::new(make~ : (Int32) -&gt; @moonkart.Cache[K, V], shards? : Int32) -&gt; Self[K, V]</code></dt>
 <dd>Builds <code>shards</code> caches. <code>make</code> is called once per shard with that shard&#x27;s index, so each one can be bounded and tuned on its own.</dd>
+<dt><code>fn[K : Eq + Hash, V] ShardedCache::peek(Self[K, V], K) -&gt; V?</code></dt>
+<dd>Reads <code>key</code> without counting a hit or a miss and without moving it in the eviction order, as <code>Cache::peek</code> does.</dd>
+<dt><code>fn[K : Eq + Hash, V] ShardedCache::purge_expired(Self[K, V]) -&gt; Int64</code></dt>
+<dd>Sweeps every shard for entries past their deadline, and returns how many went altogether.</dd>
 <dt><code>fn[K : Eq + Hash, V] ShardedCache::set(Self[K, V], K, V) -&gt; Unit</code></dt>
 <dd>Inserts or replaces <code>key</code> in the shard that holds it.</dd>
 <dt><code>fn[K : Hash, V] ShardedCache::shard_of(Self[K, V], K) -&gt; Int32</code></dt>
@@ -192,6 +224,8 @@
 <dd>The counters of every shard added together.</dd>
 <dt><code>async fn[K : Eq + Hash, V] ShardedCache::try_get_with(Self[K, V], K, async (K) -&gt; V?) -&gt; V?</code></dt>
 <dd>A cache split into independent shards, each with its own entries, its own eviction budget and its own in-flight table. A key always lands in the same shard, so a read or a write behaves exactly as it does on a single cache; what changes is that traffic in one shard cannot evict entries in another, and a slow loader in one shard holds up nothing in the others. The shard is <code>hash(key) modulo shards</code>, so the split is stable across calls and across processes only as far as the runtime&#x27;s hash seed is. The runtime schedules tasks cooperatively, so sharding is not by itself a speed-up: it is the unit a caller can hand to its own threads, and the unit that keeps unrelated workloads from pushing each other out.</dd>
+<dt><code>fn[K, V] ShardedCache::weight(Self[K, V]) -&gt; Int64</code></dt>
+<dd>The total weight held across all shards, as <code>Cache::weight</code> adds it up.</dd>
 </dl>
 <h3 class="api__h">Type aliases</h3><dl class="api">
 <dt><code>type Spawn = (async () -&gt; Unit) -&gt; Unit</code></dt>

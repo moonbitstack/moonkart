@@ -70,6 +70,80 @@ pub fn[K : Eq + Hash, V] AsyncCache::set(
 }
 
 ///|
+/// Inserts or replaces `key` and hands back the value it displaced, as
+/// `Cache::insert` does.
+pub fn[K : Eq + Hash, V] AsyncCache::insert(
+  self : AsyncCache[K, V],
+  key : K,
+  value : V,
+) -> V? {
+  self.inner.insert(key, value)
+}
+
+///|
+/// Reads `key` without counting a hit or a miss and without moving it in the
+/// eviction order, as `Cache::peek` does.
+pub fn[K : Eq + Hash, V] AsyncCache::peek(
+  self : AsyncCache[K, V],
+  key : K,
+) -> V? {
+  self.inner.peek(key)
+}
+
+///|
+/// Whether `key` is present and live. A presence check: no hit, no idle refresh.
+pub fn[K : Eq + Hash, V] AsyncCache::contains(
+  self : AsyncCache[K, V],
+  key : K,
+) -> Bool {
+  self.inner.contains(key)
+}
+
+///|
+/// Removes `key`. Returns whether it was present.
+pub fn[K : Eq + Hash, V] AsyncCache::remove(
+  self : AsyncCache[K, V],
+  key : K,
+) -> Bool {
+  self.inner.remove(key)
+}
+
+///|
+/// Removes every entry.
+pub fn[K : Eq + Hash, V] AsyncCache::invalidate_all(
+  self : AsyncCache[K, V],
+) -> Unit {
+  self.inner.invalidate_all()
+}
+
+///|
+/// Number of entries held.
+pub fn[K, V] AsyncCache::size(self : AsyncCache[K, V]) -> Int64 {
+  self.inner.size()
+}
+
+///|
+/// The total weight of the entries held, as `Cache::weight` reports it.
+pub fn[K, V] AsyncCache::weight(self : AsyncCache[K, V]) -> Int64 {
+  self.inner.weight()
+}
+
+///|
+/// The running counters.
+pub fn[K, V] AsyncCache::stats(self : AsyncCache[K, V]) -> @moonkart.CacheStats {
+  self.inner.stats()
+}
+
+///|
+/// Drops every entry past its deadline and returns how many went, as
+/// `Cache::purge_expired` does.
+pub fn[K : Eq + Hash, V] AsyncCache::purge_expired(
+  self : AsyncCache[K, V],
+) -> Int64 {
+  self.inner.purge_expired()
+}
+
+///|
 /// Returns the value for `key`. On a miss, runs `loader(key)` and stores the
 /// result. Concurrent calls for the same key share one loader run; a loader that
 /// raises is not cached and its error is handed to every waiter. Different keys

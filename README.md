@@ -300,6 +300,11 @@ call retries. Three concurrent readers of one key call the loader exactly once.
 `concurrent` builds on the synchronous core unchanged, so every policy, expiry
 rule and counter carries over.
 
+The handle carries the rest of the surface too — `peek`, `contains`, `remove`,
+`invalidate_all`, `size`, `weight`, `stats` and `purge_expired` — so code that
+holds only an `AsyncCache` never has to reach through `inner()` to read, remove
+or measure something.
+
 ### Refreshing behind a read
 
 A value that took ten minutes to work out should not have to be a choice between
@@ -360,10 +365,11 @@ assert_eq(sharded.stats().hit_count + sharded.stats().miss_count, 1L)
 ```
 
 `make` is called once per shard with its index, so each one can be bounded and
-tuned on its own. `size()` and `stats()` report the shards added together.
-Sharding is not by itself a speed-up on a runtime that schedules tasks
-cooperatively; it is the unit that keeps unrelated workloads apart, and the unit
-a caller can hand to its own threads.
+tuned on its own. `size()` and `stats()` report the shards added together, as do
+`weight()` and `purge_expired()`; `peek` and `contains` ask the one shard the key
+belongs to. Sharding is not by itself a speed-up on a runtime that schedules
+tasks cooperatively; it is the unit that keeps unrelated workloads apart, and the
+unit a caller can hand to its own threads.
 
 ## Hybrid memory and disk (native)
 
@@ -500,6 +506,32 @@ c.invalidate_all() // everything
 assert_eq(c.size(), 0L)
 ```
 
+## Looking on the side, and sweeping
+
+Expiry is lazy: an entry past its deadline is dropped when something asks for it,
+so one nobody asks for again keeps its space and its place in the eviction order.
+Four calls cover the cases around that. `peek` answers without counting a hit or
+a miss, moving the entry in the eviction order, or restarting an idle deadline.
+`insert` is `set` that hands back the value it displaced. `weight` adds up the
+entries as the weigher counted them. `purge_expired` collects the entries whose
+deadline passed, without waiting for a read.
+
+```moonbit
+let sweep_now : @ref.Ref[Int64] = @ref.Ref(0L)
+let side = @moonkart.lru_cache(cap=8, clock=fn() { sweep_now.val })
+side.set("a", "kept", expire_after=10L)
+side.set("b", "aged", expire_after=1L)
+
+assert_eq(side.insert("a", "newer"), Some("kept")) // the value it replaced
+assert_eq(side.peek("a"), Some("newer")) // read, but counted nowhere
+assert_eq(side.stats().hit_count, 0L)
+
+sweep_now.val = 5L
+assert_eq(side.purge_expired(), 1L) // "b" died unread
+assert_eq(side.size(), 1L)
+assert_eq(side.weight(), 1L)
+```
+
 ## Events and statistics
 
 A removal listener is told about every entry that leaves, with the reason:
@@ -614,15 +646,18 @@ together with a `Config` bundle; `default_config()` fills in every optional knob
 | `system_clock` | the default clock, from the runtime |
 | `set(key, value)` | insert or replace |
 | `set(key, value, expire_after=ns)` | insert or replace, with a deadline for this write only |
+| `insert(key, value)` | the same, returning the value it displaced |
 | `get(key)` | read, or `None` |
+| `peek(key)` | read without counting it, reordering the entry or refreshing an idle deadline |
 | `contains(key)` | presence; no hit, no idle refresh |
 | `entry(key)`, `entry_or_null(key)` | snapshot of an entry |
 | `remove(key)`, `invalidate(key)` | remove one, returns whether it was present |
 | `invalidate_all()`, `invalidate_if(pred)` | remove many |
+| `purge_expired()` | drop every entry past its deadline, returns how many |
 | `get_with(key, loader)`, `try_get_with(key, loader)` | load on miss; the loader may raise |
 | `infallible_loader(loader)` | adapt a loader that cannot fail |
 | `to_array()` | every live entry as `(key, value)` |
-| `stats()`, `size()`, `policy_size()` | counters and sizes |
+| `stats()`, `size()`, `weight()`, `policy_size()` | counters, entry count, total weight, policy size |
 | `CacheStats::merge(a, b)` | two sets of counters added together |
 | `written_at(key)`, `now()` | when a value was written, and the clock reading before it |
 | `refresh_every(ns)` | a refresh window for `@moonkart/concurrent` |

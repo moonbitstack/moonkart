@@ -109,3 +109,51 @@ test "panic new refuses a cache with no shards" {
     make=fn(_index) { @moonkart.lru_cache(cap=1L) },
   )
 }
+
+///|
+async test "a peek and a presence check land in the right shard and change nothing" {
+  let cache : @concurrent.ShardedCache[Int32, String] = @concurrent.ShardedCache::new(
+    shards=4,
+    make=fn(_index) { @moonkart.lru_cache(cap=8L) },
+  )
+  cache.set(1, "a")
+  assert_eq(cache.peek(1), Some("a"))
+  assert_eq(cache.contains(1), true)
+  assert_eq(cache.contains(2), false)
+  assert_eq(cache.stats().hit_count, 0L)
+  assert_eq(cache.stats().miss_count, 0L)
+  assert_eq(cache.weight(), 1L)
+}
+
+///|
+async test "a sweep across the shards counts what it removed" {
+  let now : @ref.Ref[Int64] = @ref.Ref(0L)
+  let cache : @concurrent.ShardedCache[Int32, String] = @concurrent.ShardedCache::new(
+    shards=2,
+    make=fn(index) {
+      // Shard 0 keeps its entries for five ticks, shard 1 for fifty.
+      @moonkart.lru_cache(
+        cap=8L,
+        expiry=@moonkart.ttl(if index == 0 { 5L } else { 50L }),
+        clock=fn() { now.val },
+      )
+    },
+  )
+  // One key per shard, so the count is a sum and not one shard's answer twice.
+  let mut short = 0
+  while cache.shard_of(short) != 0 {
+    short = short + 1
+  }
+  let mut long = short
+  while cache.shard_of(long) != 1 {
+    long = long + 1
+  }
+  cache.set(short, "a")
+  cache.set(long, "b")
+  now.val = 10L
+  assert_eq(cache.size(), 2L)
+  assert_eq(cache.purge_expired(), 1L)
+  assert_eq(cache.size(), 1L)
+  assert_eq(cache.contains(short), false)
+  assert_eq(cache.contains(long), true)
+}
