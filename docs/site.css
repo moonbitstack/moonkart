@@ -92,9 +92,17 @@ body{
     var(--fluteW);
   background-size:auto,100% 18px;background-repeat:no-repeat,repeat-y;
   box-shadow:inset -10px 0 12px -10px rgba(0,0,0,.85), inset 2px 0 0 rgba(255,240,214,.22)}
-/* the native bar is hidden: this one is a strip of board in the groove */
-html{scrollbar-width:none;-ms-overflow-style:none}
-html::-webkit-scrollbar{width:0;height:0;display:none}
+/* The native bar is hidden: this one is a strip of board in the groove. Each
+   family of browsers is served in its own @supports block, because Chrome drops
+   every ::-webkit-scrollbar rule on an element the moment `scrollbar-width` or
+   `scrollbar-color` is set on it — the standard property would quietly undo the
+   drawing that follows. */
+@supports selector(::-webkit-scrollbar) {
+  html::-webkit-scrollbar{width:0;height:0;display:none}
+}
+@supports not selector(::-webkit-scrollbar) {
+  html{scrollbar-width:none;-ms-overflow-style:none}
+}
 
 /* the bar is a length of clear tape stuck to the right wall, sliding with the page.
    It covers that wall end to end and overhangs the dark a little on the left,
@@ -445,6 +453,12 @@ pre::-webkit-scrollbar{height:6px}
 pre::-webkit-scrollbar-track{background:transparent}
 pre::-webkit-scrollbar-thumb{background:rgba(122,95,60,.3);border-radius:0}
 pre:hover::-webkit-scrollbar-thumb{background:rgba(122,95,60,.55)}
+/* Browsers without ::-webkit-scrollbar get the same thin, dimmed bar through the
+   standard properties, again inside their own block so they never reach Chrome. */
+@supports not selector(::-webkit-scrollbar) {
+  pre{scrollbar-width:thin;scrollbar-color:rgba(122,95,60,.3) transparent}
+  pre:hover{scrollbar-color:rgba(122,95,60,.55) transparent}
+}
 
 .out{padding:20px 18px;--tilt:.9deg;margin-top:34px;--tape-x:58%;--tape-w:92px}
 .out__tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink-2);margin:0 0 10px}

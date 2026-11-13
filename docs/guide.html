@@ -124,6 +124,10 @@ now.val = <span class="c-num">11L</span>
 <pre>at t=0:  <b>true true</b>
 at t=11: <b>false true</b></pre>
     </div>
+    <div class="note"><span><b>Expiry is lazy.</b> An entry past its deadline leaves when something
+      asks for it, so one that is never asked for again keeps its place. <code>purge_expired()</code>
+      sweeps those out and returns how many went, which is what a cache that writes more than it
+      reads needs now and then.</span></div>
   </section>
 
   <section class="chapter panel" id="load">
@@ -196,6 +200,20 @@ counted.<span class="c-fn">set</span>(<span class="c-str">"user:128"</span>, <sp
     <div class="note"><span><b>Removal listener.</b> Pass one at construction and every entry that
       leaves reports why: <code>Capacity</code>, <code>Expired</code>, <code>Explicit</code> or
       <code>Replaced</code>.</span></div>
+    <p>The counters count reads. A read that should not count &mdash; a dashboard looking into a cache
+      it also serves from &mdash; is <code>peek</code>: it answers without a hit, without a miss, and
+      without moving the entry in the eviction order.</p>
+    <div class="label">
+<pre><code><span class="c-key">let</span> watched = <span class="c-pkg">@moonkart</span>.<span class="c-fn">lru_cache</span>(cap=<span class="c-num">8L</span>)
+watched.<span class="c-fn">set</span>(<span class="c-str">"k"</span>, <span class="c-num">1</span>)
+<span class="c-fn">println</span>(watched.<span class="c-fn">peek</span>(<span class="c-str">"k"</span>) == <span class="c-key">Some</span>(<span class="c-num">1</span>))
+<span class="c-fn">println</span>(watched.<span class="c-fn">stats</span>().hit_count)</code></pre>
+    </div>
+    <div class="out panel">
+      <p class="out__tag">WHAT IT PRINTS</p>
+<pre><b>true</b>
+<b>0</b></pre>
+    </div>
   </section>
 
   <section class="chapter panel" id="reload">

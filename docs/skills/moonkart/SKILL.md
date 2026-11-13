@@ -30,6 +30,7 @@ fn price(cache : @moonkart.Cache[String, Double], sku : String) -> Double? {
 ```
 
 Every constructor returns the same `Cache[K, V]`, so switching policy changes one line.
+`set` replaces in place; `insert` is the same write and hands back the value it displaced.
 
 ## Load on a miss
 
@@ -112,6 +113,8 @@ pub fn revision() -> String {
 ## Things that catch people out
 
 - The cache reads no clock unless you give it one: expiry needs `clock`, a nanosecond reading. `system_clock` is there for production; tests pass their own and never sleep.
+- Expiry is lazy: an entry past its deadline leaves when something asks for it, so one nobody asks for keeps its place. `purge_expired()` sweeps those out and returns the count; `weight()` reports the total the weigher counted.
+- `peek` answers without counting a hit or a miss, moving the entry in the eviction order, or restarting an idle deadline. Use it to inspect a cache you also serve from.
 - `removal_listener` hears every entry that leaves, with the reason: `Capacity`, `Expired`, `Explicit` or `Replaced`. `stats()` gives hits, misses and their rates.
 - A weight-bounded cache needs both `max_weight` and a `weigher`; `cap` and `max_weight` are alternatives.
 - `@concurrent.ShardedCache` splits the key space over independent caches with their own budgets. It keeps unrelated traffic from evicting your entries; it does not add parallelism by itself.
