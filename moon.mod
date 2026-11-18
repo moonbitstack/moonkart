@@ -43,7 +43,7 @@ description = "A cache for MoonBit: bounded by count or weight, with expiry, loa
 
 import {
   "moonbitstack/moonast@0.3.0",
-  "moonbitlang/parser@0.4.8",
+  "moonbitlang/parser@0.4.9",
   "moonbitlang/async@0.22.5",
   "moonbitstack/moonbase@0.5.0",
 }

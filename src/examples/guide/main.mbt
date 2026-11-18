@@ -15,7 +15,7 @@ fn main raise {
     _k : String,
     v : String,
   ) {
-    Int64::from_int(v.length())
+    v.length().to_int64()
   })
   by_weight.set("foo", ".foo{}")
   by_weight.set("emm", ".emm{}")

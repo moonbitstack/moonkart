@@ -20,7 +20,7 @@ fn cache() -> @moonkart.Cache[String, String] {
 /// Builds a fresh cache with room for `cap` entries.
 #export_name("mk_reset")
 pub fn mk_reset(cap : Int32) -> Unit {
-  let c = @moonkart.tinylfu_cache(cap=Int64::from_int(cap))
+  let c = @moonkart.tinylfu_cache(cap=cap.to_int64())
   if slot.is_empty() {
     slot.push(c)
   } else {
@@ -100,7 +100,7 @@ fn replay_line(
 /// Runs the trace against the named policy. Returns one line per request.
 #export_name("mk_replay")
 pub fn mk_replay(policy : String, cap : Int32, trace : String) -> String {
-  let cap = Int64::from_int(cap)
+  let cap = cap.to_int64()
   let left : Array[String] = []
   let note = fn(k : String, _v : String, r : @moonkart.EvictionReason) {
     left.push("\{k}:\{reason_code(r)}")
@@ -128,9 +128,9 @@ pub fn mk_survey(cap : Int32, trace : String, watch : String) -> String {
   let lines : Array[String] = []
   for policy in ["lru", "s3fifo", "tinylfu"] {
     let cache = match policy {
-      "lru" => @moonkart.lru_cache(cap=Int64::from_int(cap))
-      "s3fifo" => @moonkart.s3fifo_cache(cap=Int64::from_int(cap))
-      _ => @moonkart.tinylfu_cache(cap=Int64::from_int(cap))
+      "lru" => @moonkart.lru_cache(cap=cap.to_int64())
+      "s3fifo" => @moonkart.s3fifo_cache(cap=cap.to_int64())
+      _ => @moonkart.tinylfu_cache(cap=cap.to_int64())
     }
     let mut hits = 0
     for k in keys {

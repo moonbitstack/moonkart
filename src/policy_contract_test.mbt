@@ -174,5 +174,5 @@ test "the tinylfu segment ratios are honoured at the boundary" {
     c.set(i, i)
   }
   assert_eq(c.size(), 16L)
-  assert_eq(Int64::from_int(c.policy_size()), 16L)
+  assert_eq(c.policy_size().to_int64(), 16L)
 }

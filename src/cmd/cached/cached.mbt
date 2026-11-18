@@ -249,7 +249,7 @@ impl @gen.Generator for Cached with fn generate(_, decls) {
         attrs~,
         public~,
         file~,
-        raw~
+        raw~,
       ) => {
         let found = kart_attrs(attrs, file)
         guard !found.is_empty() else { continue }

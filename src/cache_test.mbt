@@ -167,7 +167,7 @@ test "replacing reports Replaced" {
 
 ///|
 test "a weigher bounds the cache by weight" {
-  let weigher = fn(_k : String, v : String) { Int64::from_int(v.length()) }
+  let weigher = fn(_k : String, v : String) { v.length().to_int64() }
   let c = @moonkart.lru_cache(max_weight=5L, weigher~)
   c.set("a", "12")
   c.set("b", "34")
@@ -347,12 +347,12 @@ test "size and policy size agree and fill the capacity" {
   for i = 0; i < 5000; i = i + 1 {
     c.set(i % 1000, i)
     if i % 500 == 0 {
-      assert_eq(c.size(), Int64::from_int(c.policy_size()))
+      assert_eq(c.size(), c.policy_size().to_int64())
       assert_true(c.size() <= 64L)
     }
   }
   assert_eq(c.size(), 64L)
-  assert_eq(Int64::from_int(c.policy_size()), 64L)
+  assert_eq(c.policy_size().to_int64(), 64L)
 }
 
 ///|
